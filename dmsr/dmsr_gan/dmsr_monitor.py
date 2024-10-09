@@ -10,36 +10,121 @@ import os
 import time
 import numpy as np
 
+from torch.nn import MSELoss
 
-class DMSRMonitor():
+
+#=============================================================================#
+#                               Monitor Manager
+#=============================================================================#
+
+class MonitorManager():
     
-    def __init__(
-            self, 
-            generator,
-            report_rate,
-            lr_sample, 
-            lr_box_size, 
-            hr_sample, 
-            hr_box_size,
-            device
-        ):
-        
-        batch_size = lr_sample.shape[0]
-        
-        self.generator = generator
-        self.z = generator.sample_latent_space(batch_size, device)
-        
-        self.lr_sample = lr_sample.to(device)
-        self.hr_sample = hr_sample.to(device)
-        self.lr_box_size = lr_box_size
-        self.hr_box_size = hr_box_size
-        
+    def __init__(self, report_rate, device):
+        self.device = device
         self.report_rate = report_rate
-        self.samples_dir = './data/samples/'
-        os.makedirs(self.samples_dir, exist_ok=True)
-        np.save(self.samples_dir + 'lr_sample.npy', lr_sample.numpy())
-        np.save(self.samples_dir + 'hr_sample.npy', hr_sample.numpy())
         
+    
+    def set_monitors(self, monitors):
+        self.monitors = monitors
+        
+    
+    def init_monitoring(self, num_epochs, num_batches):
+        self.num_epochs = num_epochs
+        self.num_batches = num_batches
+        self.batch_start_time = time.time()
+        self.epoch_start_time = time.time()
+    
+    
+    def end_of_epoch(self, epoch):
+        epoch_time = time.time() - self.epoch_start_time
+        print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
+        
+        for monitor in self.monitors.values():
+            monitor.post_epoch_processing(epoch)
+        
+        self.epoch_start_time = time.time()
+        self.batch_start_time = time.time()
+    
+        
+    def end_of_batch(self, epoch, batch, batch_counter, losses):
+        monitor_report = ''
+        
+        for monitor in self.monitors.values():
+            monitor_report += monitor.post_batch_processing(
+                epoch, batch, batch_counter, losses
+            )
+        
+        self.batch_report(epoch, batch, monitor_report)
+    
+    
+    def batch_report(self, epoch, batch, monitor_report):
+        """Report some satistics for the last few batch updates.
+        """
+        if (batch > 0 and batch % self.report_rate == 0):
+            time_curr = time.time()
+            time_prev = self.batch_start_time
+            average_batch_time = (time_curr - time_prev) / self.report_rate
+            
+            report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
+            report += f"[Batch {batch:03}/{self.num_batches}]"
+            report += f"[time per batch: {average_batch_time*1000:.4f} ms]"
+            report += monitor_report
+            
+            print(report)
+            self.batch_start_time = time.time()
+    
+
+
+#=============================================================================#
+#                                 Monitors
+#=============================================================================#
+
+class BaseMonitor():
+    
+    def post_epoch_processing(self, epoch):
+        pass
+    
+    def post_batch_processing(self, epoch, batch, batch_counter, losses):
+        return ''
+
+
+
+class SupervisedMonitor(BaseMonitor):
+    
+    def __init__(self, generator, validation_set, device):
+        self.generator = generator
+        self.device = device
+        self.validation_set = validation_set
+        self.generator_valid_losses = []
+        self.generator_valid_epochs = []
+        self.mse_loss = MSELoss()
+    
+    
+    def post_epoch_processing(self, epoch):
+    
+        total_loss = 0
+        for lr_batch, hr_batch in self.validation_set:
+            # Move data to the device.
+            lr_batch = lr_batch.to(self.device)
+            hr_batch = hr_batch.to(self.device)
+            
+            # Use the generator to create fake data.
+            z = self.generator.sample_latent_space(1, self.device)
+            sr_batch = self.generator(lr_batch, z)
+            
+            # Compute the loss.
+            loss = self.mse_loss(sr_batch, hr_batch)
+            total_loss += loss.item()
+        
+        total_loss /= len(self.validation_set)
+        self.generator_valid_losses.append(total_loss)
+        self.generator_valid_epochs.append(epoch)
+        
+
+
+class LossMonitor(BaseMonitor):
+    
+    def __init__(self):
         self.critic_loss       = []
         self.critic_batches    = []
         self.generator_loss    = []
@@ -51,27 +136,7 @@ class DMSRMonitor():
         self.average_generator_loss = 0
         
         
-    def end_of_epoch(self, epoch):
-        epoch_time = time.time() - self.epoch_start_time
-        print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
-        
-        self.save_generator_sample(epoch)
-        self.save_losses()
-        self.average_critic_loss = 0
-        self.average_generator_loss = 0
-        self.epoch_start_time = time.time()
-        self.batch_start_time = time.time()
-        
-    
-    def save_generator_sample(self, epoch):
-        sr_sample = self.generator(self.lr_sample, self.z)
-        sr_sample = sr_sample.detach().cpu()
-        filename = self.samples_dir + f'sr_sample_{epoch:04}.npy'
-        np.save(filename, sr_sample.numpy())
-      
-        
-    def end_of_batch(self, epoch, batch, batch_counter, losses):
-        
+    def post_batch_processing(self, epoch, batch, batch_counter, losses):
         if 'critic_loss' in losses:
             critic_loss = losses['critic_loss']
             self.average_critic_loss += critic_loss
@@ -94,37 +159,21 @@ class DMSRMonitor():
             if not isinstance(gradient_penalty, int):
                 self.gradient_penalty.append(gradient_penalty)
                 self.grad_pen_batches.append(batch_counter)
+          
+        report = ''
+        if not (self.average_critic_loss == 0):
+            report += f"[C loss: {self.average_critic_loss/(batch+1):.8f}]"
+
+        if not (self.average_generator_loss == 0):
+            report += f"[G loss: {self.average_generator_loss/(batch+1):.8f}]"
         
-        self.batch_report(epoch, batch)
-            
-    
-    def init_monitoring(self, num_epochs, num_batches):
-        self.num_epochs = num_epochs
-        self.num_batches = num_batches
-        self.batch_start_time = time.time()
-        self.epoch_start_time = time.time()
-    
-    
-    def batch_report(self, epoch, batch):
-        """Report some satistics for the last few batch updates.
-        """
-        if (batch > 0 and batch % self.report_rate == 0):
-            time_curr = time.time()
-            time_prev = self.batch_start_time
-            average_batch_time = (time_curr - time_prev) / self.report_rate
-            
-            report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
-            report += f"[Batch {batch:03}/{self.num_batches}]"
-            report += f"[time per batch: {average_batch_time:.4f} sec]"
-            
-            if not (self.average_critic_loss == 0):
-                report += f"[C loss: {self.average_critic_loss/batch:.8f}]"
-            
-            if not (self.average_generator_loss == 0):
-                report += f"[G loss: {self.average_generator_loss/batch:.8f}]"
-            
-            print(report)
-            self.batch_start_time = time.time()
+        return report
+                
+                
+    def post_epoch_processing(self, epoch):
+        self.save_losses()
+        self.average_critic_loss = 0
+        self.average_generator_loss = 0
     
     
     def save_losses(self):
@@ -137,3 +186,50 @@ class DMSRMonitor():
             'gradient_penalty'  : self.gradient_penalty,
             'grad_pen_batches'  : self.grad_pen_batches
         })
+        
+        
+  
+class SamplesMonitor(BaseMonitor):
+    
+    def __init__(self,
+                 generator, 
+                 lr_sample, 
+                 hr_sample, 
+                 lr_box_size, 
+                 hr_box_size,
+                 device
+        ):
+        
+        self.lr_sample = lr_sample
+        self.hr_sample = hr_sample
+        self.lr_box_size = lr_box_size
+        self.hr_box_size = hr_box_size
+        
+        self.generator = generator
+        batch_size = lr_sample.shape[0]
+        self.z = generator.sample_latent_space(batch_size, device)
+        
+        self.samples_dir = './data/samples/'
+        os.makedirs(self.samples_dir, exist_ok=True)
+        np.save(self.samples_dir + 'lr_sample.npy', lr_sample.numpy())
+        np.save(self.samples_dir + 'hr_sample.npy', hr_sample.numpy())
+        
+        
+    def post_epoch_processing(self, epoch):
+        sr_sample = self.generator(self.lr_sample, self.z)
+        sr_sample = sr_sample.detach().cpu()
+        filename = self.samples_dir + f'sr_sample_{epoch:04}.npy'
+        np.save(filename, sr_sample.numpy())
+        
+        
+
+class CheckpointMonitor(BaseMonitor):
+    
+    def __init__(self, gan, checkpoint_dir):
+        self.gan = gan
+        self.checkpoint_dir = checkpoint_dir
+    
+    
+    def post_epoch_processing(self, epoch):
+        checkpoint_name = 'current_model/'
+        self.gan.save(self.checkpoint_dir + checkpoint_name)

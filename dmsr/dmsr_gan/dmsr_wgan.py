@@ -15,6 +15,7 @@ from torch.nn.functional import interpolate
 from dmsr.field_operations.resize import crop
 from dmsr.field_operations.conversion import cic_density_field
 
+
 class DMSRWGAN:
     """
     """
@@ -131,16 +132,6 @@ class DMSRWGAN:
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
         )
         
-        # # # TODO: Remove this
-        # for i in range(8):
-        #     fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        #     # plot_sample(ax, lr_batch[i, ...], 20*self.box_size/16, 'lr')
-        #     plot_sample(ax, us_batch[i, ...], self.box_size, 'us')
-        #     plot_sample(ax, hr_batch[i, ...], self.box_size, 'hr')
-        #     plt.show(fig)
-        #     fig.savefig(f'sample{i}.png', dpi=140)
-        #     plt.close(fig)
-        
         us_density = cic_density_field(us_batch, self.box_size)
         us_batch = concat((us_density, us_batch), dim=1).detach()
         
@@ -239,6 +230,7 @@ class DMSRWGAN:
     
     
     #=========================================================================#
+<<<<<<< HEAD
     #                          Utility Methods
     #=========================================================================#
     
@@ -298,11 +290,38 @@ class DMSRWGAN:
 #     # plt.tight_layout()
 #     # plt.show()
 #     # plt.close()
+    #                         Saving and Loading
+    #=========================================================================#
     
-
-# def get_xys(positions):
-#     positions = torch.transpose(positions, 1, -1)
-#     positions = positions.reshape((-1, 3))
-#     xs = positions[:, 0]
-#     ys = positions[:, 1]
-#     return xs, ys
+    def save(self, model_dir = './data/model/'):
+        """
+        Note: data attributes to are note saved. These should be set by the
+        set_dataset method.
+        """
+        os.makedirs(model_dir, exist_ok=True)
+        
+        save(self.critic, model_dir + 'critic.pth')
+        save(self.generator, model_dir + 'generator.pth')
+        
+        optimizer_states = {
+            'optimizer_c' : self.optimizer_c.state_dict(),
+            'optimizer_g' : self.optimizer_g.state_dict()
+        }
+        save(optimizer_states, model_dir + 'optimizers.pth')
+        
+        attributes = {
+            'batch_counter' : self.batch_counter
+        }
+        save(attributes, model_dir + 'attributes.pth')
+        
+        
+    def load(self, checkpoint_dir):
+        self.critic = load(checkpoint_dir + 'critic.pth')
+        self.generator = load(checkpoint_dir + 'generator.pth')
+        
+        optimizer_states = load(checkpoint_dir + 'optimizers.pth')
+        self.optimizer_c.load_state_dict(optimizer_states['optimizer_c'])
+        self.optimizer_g.load_state_dict(optimizer_states['optimizer_g'])
+        
+        attributes = load(checkpoint_dir + 'attributes.pth')
+        vars(self).update(attributes)

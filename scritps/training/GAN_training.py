@@ -20,7 +20,6 @@ from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
 from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
 
 from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
-from dmsr.dmsr_gan.dmsr_monitor import DMSRMonitor
 from dmsr.swift_processing import load_numpy_dataset
 
 
@@ -37,7 +36,7 @@ LR_grid_size, generator_channels, scale_factor = 20, 512, 4
 generator = DMSRGenerator(LR_grid_size, generator_channels, scale_factor)
 
 critic_size = generator.output_size
-critic_channels = 128
+critic_channels = 8
 critic = DMSRCritic(critic_size, critic_channels)
 
 generator.to(device)
@@ -58,7 +57,7 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 
 
 #=============================================================================#
-#                               Dataset
+#                           Training Dataset
 #=============================================================================#
 data_directory = '../../data/dmsr_training/'
 batch_size = 4
@@ -71,6 +70,7 @@ LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 4) // 2
 # LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
 
+<<<<<<< HEAD
 dataset = DMSRDataset(
     LR_data.float(), HR_data.float(), augment=True
 )
@@ -78,34 +78,96 @@ dataset = DMSRDataset(
 dataloader = DataLoader(
     dataset, batch_size=batch_size, shuffle=True, drop_last=True
 )
+=======
+train_dataset = DMSRDataset(LR_data.float(), HR_data.float(), augment=True)
+train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+>>>>>>> 4dda4d3... Add monitor manager and montior classes
 
 
 #=============================================================================#
-#                               Monitor
+#                           Validation Dataset
 #=============================================================================#
-n = 1
-lr_sample = LR_data[n:n+1, ...].float()
-hr_sample = HR_data[n:n+1, ...].float()
+data_directory = '../../data/dmsr_validation/'
 
+<<<<<<< HEAD
 monitor = DMSRMonitor(
     generator, 64, lr_sample, 20*box_size/16, hr_sample, box_size, device
 )
+=======
+data = load_numpy_dataset(data_directory)
+LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 2) // 2
+# LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
+
+# valid_dataset = DMSRDataset(LR_data.float(), HR_data.float())
+# valid_dataloader = DataLoader(valid_dataset, batch_size=1)
+>>>>>>> 4dda4d3... Add monitor manager and montior classes
 
 
 #=============================================================================#
 #                              DMSR WGAN
 #=============================================================================#
 gan = DMSRWGAN(generator, critic, device)
-gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
+gan.set_dataset(train_dataloader, batch_size, box_size, lr_padding, scale_factor)
 gan.set_optimizer(optimizer_c, optimizer_g)
-gan.set_monitor(monitor)
+
+
+#=============================================================================#
+#                               Monitor
+#=============================================================================#
+from dmsr.dmsr_gan.dmsr_monitor import MonitorManager, LossMonitor
+from dmsr.dmsr_gan.dmsr_monitor import SamplesMonitor, CheckpointMonitor
+
+lr_sample = LR_data[1:2, ...].float()
+hr_sample = HR_data[1:2, ...].float()
+lr_box_size = 20 * box_size / 16
+hr_box_size = box_size
+
+monitors = {
+    'loss_monitor' : LossMonitor(),
+    
+    'samples_monitor' : SamplesMonitor(
+        generator, 
+        lr_sample, hr_sample, 
+        lr_box_size, hr_box_size, 
+        device
+    ),
+    
+    'checkpoint_monitor' : CheckpointMonitor(
+        gan,
+        checkpoint_dir = './data/checkpoints/'
+    )
+}
+
+batch_report_rate = 16
+monitor_manager = MonitorManager(batch_report_rate, device)
+monitor_manager.set_monitors(monitors)
+gan.set_monitor(monitor_manager)
 
 
 #=============================================================================#
 #                         Supervised Training
 #=============================================================================#
-gan.train(5, train_step=gan.generator_supervised_step)
+# from dmsr.dmsr_gan.dmsr_monitor import SupervisedValidator
+
+# supervised_epochs = 5
+# validator = SupervisedValidator(generator, valid_dataloader, device)
+
+
+#%%
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.generator_supervised_step, 
+#     validator = validator
+# )
 # gan.train(5, train_step=gan.critic_supervised_step)
+
+#%%
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# plt.plot([np.sum(monitor.generator_loss[128*n:128*(n+1)])/128 for n in range(20)])
+# plt.plot(validator.generator_valid_losses)
 
 
 
@@ -113,5 +175,9 @@ gan.train(5, train_step=gan.generator_supervised_step)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1024 * 6
+num_epochs = 2 # 1024 * 6
 gan.train(num_epochs)
+
+
+#%%
+# gan.load('./data/checkpoints/current_model/')
