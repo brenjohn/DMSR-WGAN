@@ -33,7 +33,7 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-LR_grid_size, generator_channels, scale_factor = 20, 256, 2
+LR_grid_size, generator_channels, scale_factor = 20, 512, 4
 generator = DMSRGenerator(LR_grid_size, generator_channels, scale_factor)
 
 critic_size = generator.output_size
@@ -61,15 +61,23 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #                               Dataset
 #=============================================================================#
 data_directory = '../../data/dmsr_training/'
-batch_size = 8
+batch_size = 4
 
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
-lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 2) // 2
+
+# TODO: The four below depends on scale factor. Maybe this should be read from
+# dataset somehow or metadata.
+lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 4) // 2
 # LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
 
-dataset = DMSRDataset(LR_data.float(), HR_data.float(), augment=True)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataset = DMSRDataset(
+    LR_data.float(), HR_data.float(), augment=True
+)
+
+dataloader = DataLoader(
+    dataset, batch_size=batch_size, shuffle=True, drop_last=True
+)
 
 
 #=============================================================================#
@@ -80,7 +88,7 @@ lr_sample = LR_data[n:n+1, ...].float()
 hr_sample = HR_data[n:n+1, ...].float()
 
 monitor = DMSRMonitor(
-    generator, 16, lr_sample, 20*box_size/16, hr_sample, box_size, device
+    generator, 64, lr_sample, 20*box_size/16, hr_sample, box_size, device
 )
 
 

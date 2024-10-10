@@ -49,11 +49,11 @@ def plot_samples(
     ax1.set_title('LR')
     
     # HR scatter plot
-    ax3.scatter(hr_xs, hr_ys, alpha=0.2, s=0.1)
+    ax3.scatter(hr_xs, hr_ys, alpha=0.1, s=0.1)
     ax3.set_title('HR')
     
     # SR scatter plot
-    ax2.scatter(sr_xs, sr_ys, alpha=0.2, s=0.1)
+    ax2.scatter(sr_xs, sr_ys, alpha=0.1, s=0.1)
     ax2.set_title('SR')
     ax2.set_xlim(ax3.get_xlim())
     ax2.set_ylim(ax3.get_ylim())

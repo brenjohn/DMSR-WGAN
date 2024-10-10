@@ -50,7 +50,9 @@ class DMSRGenerator(nn.Module):
             noise_shapes.append((N, 2 * N - 2))
             N = 2 * N - 4
             
-        self.output_size = N
+        # TODO: the -4 comes from the crop at the end of the forward pass, this
+        # should be set by the user.
+        self.output_size = N - 4
         self.noise_shapes = noise_shapes
 
 
@@ -61,6 +63,8 @@ class DMSRGenerator(nn.Module):
         for block, noise in zip(self.blocks, z):
             x, y = block(x, y, noise)
         
+        # TODO: This crop size should be configured by the user.
+        y = crop(y, 2)
         return y
     
     

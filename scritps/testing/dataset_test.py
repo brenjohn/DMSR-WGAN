@@ -54,7 +54,7 @@ for lr_batch, hr_batch in dataloader:
     print(lr_batch.shape)
     print(hr_batch.shape)
     
-    lr_positions = displacements_to_positions(lr_batch, 20*box_size/16) - (2 * box_size/16)
+    lr_positions = displacements_to_positions(lr_batch, 20*box_size/14) - (3 * box_size/14)
     hr_positions = displacements_to_positions(hr_batch, box_size)
     plot_positions(lr_positions)
     plot_positions(hr_positions)

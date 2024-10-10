@@ -123,6 +123,6 @@ for sr_sample in sr_samples:
     
     plot_spectra(
         lr_sample, sr_sample, hr_sample,
-        8, 1, 20*box_size/16, box_size, 20, 32,
+        64, 1, 20*box_size/14, box_size, 20, 56,
         epoch, plots_dir
     )

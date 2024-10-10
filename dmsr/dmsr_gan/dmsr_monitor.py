@@ -115,7 +115,7 @@ class DMSRMonitor():
             
             report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
             report += f"[Batch {batch:03}/{self.num_batches}]"
-            report += f"[time per batch: {average_batch_time*1000:.4f} ms]"
+            report += f"[time per batch: {average_batch_time:.4f} sec]"
             
             if not (self.average_critic_loss == 0):
                 report += f"[C loss: {self.average_critic_loss/batch:.8f}]"

@@ -8,7 +8,7 @@ Created on Wed Sep 25 10:34:12 2024
 
 import os
 
-from torch import concat, rand, autograd, save
+from torch import concat, rand, autograd, save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
 
@@ -238,12 +238,45 @@ class DMSRWGAN:
         return losses
     
     
-    # def save(self):
-    #     model_dir = './data/model/'
-    #     os.makedirs(model_dir, exist_ok=True)
+    #=========================================================================#
+    #                          Utility Methods
+    #=========================================================================#
+    
+    def save(self, model_dir = './data/model/'):
+        os.makedirs(model_dir, exist_ok=True)
         
-    #     save(self.critic, model_dir + 'critic.pth')
-    #     save(self.generator, model_dir + 'generator.pth')
+        save(self.critic, model_dir + 'critic.pth')
+        save(self.generator, model_dir + 'generator.pth')
+        save(self.optimizer_c.state_dict(), model_dir + 'optimizer_c.pth')
+        save(self.optimizer_g.state_dict(), model_dir + 'optimizer_g.pth')
+        
+        attributes = {
+            'batch_counter' : self.batch_counter,
+            'box_size'      : self.box_size,
+            'lr_padding'    : self.lr_padding,
+            'scale_factor'  : self.scale_factor,
+            'batch_size'    : self.batch_size
+        }
+        save(attributes, model_dir + 'attributes.pth')
+        
+    
+    def load(self, model_dir):
+        
+        attributes = load(model_dir + 'attributes.pth')
+        self.batch_counter = attributes['batch_counter']
+        self.box_size      = attributes['box_size']
+        self.lr_padding    = attributes['lr_padding']
+        self.scale_factor  = attributes['scale_factor']
+        self.batch_size    = attributes['batch_size']
+        
+        optimizer_c_state = load(model_dir + 'optimizer_c.pth')
+        self.optimizer_c.load_state_dict(optimizer_c_state)
+        
+        optimizer_g_state = load(model_dir + 'optimizer_g.pth')
+        self.optimizer_g.load_state_dict(optimizer_g_state)
+        
+        self.critic = load(model_dir + 'critic.pth')
+        self.generator = load(model_dir + 'generator.pth')
     
 
 # import torch
