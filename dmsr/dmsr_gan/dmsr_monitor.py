@@ -222,6 +222,27 @@ class SamplesMonitor(BaseMonitor):
         np.save(filename, sr_sample.numpy())
         
         
+        
+class UpscaleMonitor(BaseMonitor):
+    
+    def __init__(self, generator, validation_set, realisations, device):
+        self.generator = generator
+        self.validation_set = validation_set
+        self.realisations = realisations
+        self.device = device
+        
+        
+    def post_epoch_processing(self, epoch):
+        
+        for lr_sample, hr_sample in self.data:
+            
+            z = self.generator.sample_latent_space(1, self.device)
+            sr_sample = self.generator(lr_sample, z)
+            
+            
+            
+        
+        
 
 class CheckpointMonitor(BaseMonitor):
     
