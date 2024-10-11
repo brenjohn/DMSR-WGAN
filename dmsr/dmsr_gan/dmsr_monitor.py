@@ -11,6 +11,7 @@ import time
 import numpy as np
 
 from torch.nn import MSELoss
+from ..analysis import displacement_power_spectrum
 
 
 #=============================================================================#
@@ -38,12 +39,15 @@ class MonitorManager():
     def end_of_epoch(self, epoch):
         epoch_time = time.time() - self.epoch_start_time
         print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
+        post_processing_start_time = time.time()
         
         for monitor in self.monitors.values():
             monitor.post_epoch_processing(epoch)
         
         self.epoch_start_time = time.time()
         self.batch_start_time = time.time()
+        post_processing_time = time.time() - post_processing_start_time
+        print(f"[Post-processing took: {post_processing_time:.4f} sec]")
     
         
     def end_of_batch(self, epoch, batch, batch_counter, losses):
@@ -137,6 +141,8 @@ class LossMonitor(BaseMonitor):
         
         
     def post_batch_processing(self, epoch, batch, batch_counter, losses):
+        """
+        """
         if 'critic_loss' in losses:
             critic_loss = losses['critic_loss']
             self.average_critic_loss += critic_loss
@@ -191,13 +197,14 @@ class LossMonitor(BaseMonitor):
   
 class SamplesMonitor(BaseMonitor):
     
-    def __init__(self,
-                 generator, 
-                 lr_sample, 
-                 hr_sample, 
-                 lr_box_size, 
-                 hr_box_size,
-                 device
+    def __init__(
+            self,
+            generator, 
+            lr_sample, 
+            hr_sample, 
+            lr_box_size, 
+            hr_box_size,
+            device
         ):
         
         self.lr_sample = lr_sample
@@ -205,9 +212,13 @@ class SamplesMonitor(BaseMonitor):
         self.lr_box_size = lr_box_size
         self.hr_box_size = hr_box_size
         
+        self.device = device
         self.generator = generator
         batch_size = lr_sample.shape[0]
-        self.z = generator.sample_latent_space(batch_size, device)
+        # TODO: Manage the  creation and movement of the latent space variable
+        # in a cleaner way.
+        z = generator.sample_latent_space(batch_size, device)
+        self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = './data/samples/'
         os.makedirs(self.samples_dir, exist_ok=True)
@@ -216,7 +227,12 @@ class SamplesMonitor(BaseMonitor):
         
         
     def post_epoch_processing(self, epoch):
-        sr_sample = self.generator(self.lr_sample, self.z)
+        # Move data to the device and use the generator to create fake data.
+        lr_sample = self.lr_sample.to(self.device)
+        z = [(z0.to(self.device), z1.to(self.device)) for z0, z1 in self.z]
+        sr_sample = self.generator(lr_sample, z)
+        
+        # Move the fake data to the cpu and save.
         sr_sample = sr_sample.detach().cpu()
         filename = self.samples_dir + f'sr_sample_{epoch:04}.npy'
         np.save(filename, sr_sample.numpy())
@@ -225,24 +241,79 @@ class SamplesMonitor(BaseMonitor):
         
 class UpscaleMonitor(BaseMonitor):
     
-    def __init__(self, generator, validation_set, realisations, device):
+    def __init__(
+            self, 
+            generator, 
+            realisations, 
+            device, 
+        ):
         self.generator = generator
-        self.validation_set = validation_set
         self.realisations = realisations
         self.device = device
+        self.sup_norm = []
+    
         
+    def set_data_set(
+            self, 
+            lr_data, 
+            hr_data, 
+            particle_mass, 
+            box_size, 
+            grid_size
+        ):
+        """
+        """
+        # TODO: make lr data have the right shape and is on cpu. Use a data
+        # loader
+        self.lr_data = lr_data
+        self.mass = particle_mass
+        self.box_size = box_size
+        self.grid_size = grid_size
+        self.hr_spectra = self.get_spectra(hr_data)
+        
+        
+    def get_spectra(self, data):
+        """
+        """
+        # TODO: being able to compute the power spectrum on the device may lead 
+        # to a reduction in data transfers and a nice little speed up in epoch 
+        # post processing. This could be done using pytorch's fft 
+        # implementation.
+        spectra = []
+        for sample in data:
+            sample = sample[None, ...]
+            spectrum = displacement_power_spectrum(
+                sample, self.mass, self.box_size, self.grid_size
+            )
+            spectra.append(spectrum[1])
+        return np.stack(spectra)
+    
         
     def post_epoch_processing(self, epoch):
+        """
+        """
+        sup_norm = 0
         
-        for lr_sample, hr_sample in self.data:
-            
+        for lr_sample, hr_spectrum in zip(self.lr_data, self.hr_spectra):
+            lr_sample = lr_sample.to(self.device)[None, ...]
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z)
+            sr_sample = sr_sample.detach().cpu()
             
+            sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
+                sr_sample, self.mass, self.box_size, self.grid_size
+            )
             
+            metric = self.spectral_metric(sr_spectrum, hr_spectrum)
+            sup_norm = max(sup_norm, metric)
             
+        self.sup_norm.append(sup_norm)
         
         
+    def spectral_metric(self, spectrum_a, spectrum_b):
+        return np.max(np.abs(spectrum_a - spectrum_b))
+
+
 
 class CheckpointMonitor(BaseMonitor):
     

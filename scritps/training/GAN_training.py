@@ -32,7 +32,7 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-LR_grid_size, generator_channels, scale_factor = 20, 512, 4
+LR_grid_size, generator_channels, scale_factor = 20, 8, 4
 generator = DMSRGenerator(LR_grid_size, generator_channels, scale_factor)
 
 critic_size = generator.output_size
@@ -67,10 +67,9 @@ LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
 # TODO: The four below depends on scale factor. Maybe this should be read from
 # dataset somehow or metadata.
-lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 4) // 2
+lr_padding = 3
 # LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
 
-<<<<<<< HEAD
 dataset = DMSRDataset(
     LR_data.float(), HR_data.float(), augment=True
 )
@@ -78,10 +77,6 @@ dataset = DMSRDataset(
 dataloader = DataLoader(
     dataset, batch_size=batch_size, shuffle=True, drop_last=True
 )
-=======
-train_dataset = DMSRDataset(LR_data.float(), HR_data.float(), augment=True)
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
->>>>>>> 4dda4d3... Add monitor manager and montior classes
 
 
 #=============================================================================#
@@ -89,26 +84,19 @@ train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True
 #=============================================================================#
 data_directory = '../../data/dmsr_validation/'
 
-<<<<<<< HEAD
-monitor = DMSRMonitor(
-    generator, 64, lr_sample, 20*box_size/16, hr_sample, box_size, device
-)
-=======
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
-lr_padding = (int(LR_grid_size) - int(HR_grid_size) // 2) // 2
 # LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
 
 # valid_dataset = DMSRDataset(LR_data.float(), HR_data.float())
 # valid_dataloader = DataLoader(valid_dataset, batch_size=1)
->>>>>>> 4dda4d3... Add monitor manager and montior classes
 
 
 #=============================================================================#
 #                              DMSR WGAN
 #=============================================================================#
 gan = DMSRWGAN(generator, critic, device)
-gan.set_dataset(train_dataloader, batch_size, box_size, lr_padding, scale_factor)
+gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
 gan.set_optimizer(optimizer_c, optimizer_g)
 
 
@@ -117,6 +105,7 @@ gan.set_optimizer(optimizer_c, optimizer_g)
 #=============================================================================#
 from dmsr.dmsr_gan.dmsr_monitor import MonitorManager, LossMonitor
 from dmsr.dmsr_gan.dmsr_monitor import SamplesMonitor, CheckpointMonitor
+from dmsr.dmsr_gan.dmsr_monitor import UpscaleMonitor
 
 lr_sample = LR_data[1:2, ...].float()
 hr_sample = HR_data[1:2, ...].float()
@@ -138,6 +127,25 @@ monitors = {
         checkpoint_dir = './data/checkpoints/'
     )
 }
+
+realisations = 1
+upscaling_monitor = UpscaleMonitor(
+    generator,
+    realisations,
+    device
+)
+
+
+particle_mass = 1
+grid_size = int(HR_grid_size)
+upscaling_monitor.set_data_set(
+    LR_data.float(), 
+    HR_data.float(), 
+    particle_mass, 
+    box_size, 
+    grid_size
+)
+monitors['upscaling_monitor'] = upscaling_monitor
 
 batch_report_rate = 16
 monitor_manager = MonitorManager(batch_report_rate, device)
@@ -181,3 +189,8 @@ gan.train(num_epochs)
 
 #%%
 # gan.load('./data/checkpoints/current_model/')
+
+#%%
+dataloader = DataLoader(
+    LR_data.float(), batch_size=1
+)

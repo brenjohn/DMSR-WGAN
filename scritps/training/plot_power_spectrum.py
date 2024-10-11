@@ -17,48 +17,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dmsr.field_operations.conversion import cic_density_field
-
-from numpy.fft import fftn, fftfreq
-
-
-def compute_power_spectrum(displacements, particle_mass, box_size, grid_size):
-    cell_size = box_size / grid_size
-    cell_volume = cell_size**3
-    
-    # Compute the denisty field from the given displacement field.
-    density = cic_density_field(displacements, box_size).numpy()
-    density = density[0, 0, ...] * particle_mass / cell_volume
-    
-    return power_spectrum(density, box_size, grid_size)
-
-
-def power_spectrum(density, box_size, grid_size):
-    # Get the fourier transform of the density field.
-    density_ft = fftn(density) / (grid_size**3)
-    power_spectrum_k = np.abs(density_ft)**2 * box_size**3 
-    
-    # Compute the frequency arrays
-    ks = 2 * np.pi * fftfreq(grid_size, box_size/grid_size)
-    kx, ky, kz = np.meshgrid(ks, ks, ks, indexing='ij')
-    k = np.sqrt(kx**2 + ky**2 + kz**2)
-    
-    # Radial bins
-    k_bins = np.linspace(0, np.max(k), num=grid_size//2)
-    k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
-    
-    # Average the power spectrum over spherical shells
-    power_spectrum = np.zeros_like(k_bin_centers)
-    uncertainty = np.zeros_like(k_bin_centers)
-    for i in range(len(k_bin_centers)):
-        shell_mask = (k >= k_bins[i]) & (k < k_bins[i+1])
-        power = power_spectrum_k[shell_mask] 
-        power *= k[shell_mask]**3 / (2 * np.pi**2)
-        
-        power_spectrum[i] = np.mean(power)
-        uncertainty[i] = power_spectrum[i] / np.sqrt(np.sum(shell_mask))
-    
-    return k_bin_centers, power_spectrum, uncertainty
+from dmsr.analysis import displacement_power_spectrum
 
 
 def plot_spectra(
@@ -66,15 +25,15 @@ def plot_spectra(
         lr_mass, hr_mass, lr_box_size, hr_box_size, lr_grid_size, hr_grid_size,
         epoch, plots_dir):
 
-    lr_ks, lr_spectrum, lr_uncertainty = compute_power_spectrum(
+    lr_ks, lr_spectrum, lr_uncertainty = displacement_power_spectrum(
         lr_data, lr_mass, lr_box_size, lr_grid_size
     )
 
-    sr_ks, sr_spectrum, sr_uncertainty = compute_power_spectrum(
+    sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
         sr_data, hr_mass, hr_box_size, hr_grid_size
     )
 
-    hr_ks, hr_spectrum, hr_uncertainty = compute_power_spectrum(
+    hr_ks, hr_spectrum, hr_uncertainty = displacement_power_spectrum(
         hr_data, hr_mass, hr_box_size, hr_grid_size
     )
     

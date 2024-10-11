@@ -230,79 +230,19 @@ class DMSRWGAN:
     
     
     #=========================================================================#
-<<<<<<< HEAD
-    #                          Utility Methods
-    #=========================================================================#
-    
-    def save(self, model_dir = './data/model/'):
-        os.makedirs(model_dir, exist_ok=True)
-        
-        save(self.critic, model_dir + 'critic.pth')
-        save(self.generator, model_dir + 'generator.pth')
-        save(self.optimizer_c.state_dict(), model_dir + 'optimizer_c.pth')
-        save(self.optimizer_g.state_dict(), model_dir + 'optimizer_g.pth')
-        
-        attributes = {
-            'batch_counter' : self.batch_counter,
-            'box_size'      : self.box_size,
-            'lr_padding'    : self.lr_padding,
-            'scale_factor'  : self.scale_factor,
-            'batch_size'    : self.batch_size
-        }
-        save(attributes, model_dir + 'attributes.pth')
-        
-    
-    def load(self, model_dir):
-        
-        attributes = load(model_dir + 'attributes.pth')
-        self.batch_counter = attributes['batch_counter']
-        self.box_size      = attributes['box_size']
-        self.lr_padding    = attributes['lr_padding']
-        self.scale_factor  = attributes['scale_factor']
-        self.batch_size    = attributes['batch_size']
-        
-        optimizer_c_state = load(model_dir + 'optimizer_c.pth')
-        self.optimizer_c.load_state_dict(optimizer_c_state)
-        
-        optimizer_g_state = load(model_dir + 'optimizer_g.pth')
-        self.optimizer_g.load_state_dict(optimizer_g_state)
-        
-        self.critic = load(model_dir + 'critic.pth')
-        self.generator = load(model_dir + 'generator.pth')
-    
-
-# import torch
-# import matplotlib.pyplot as plt
-# from ..field_operations.conversion import displacements_to_positions
-
-# def plot_sample(ax, sample, box_size, name):
-#     print(sample.shape)
-#     sample = sample.cpu()
-    
-#     positions = displacements_to_positions(sample[None, ...], box_size)
-    
-#     xs, ys = get_xys(positions)
-    
-#     # LR scatter plot
-#     ax.scatter(xs, ys, alpha=0.2, s=0.5)
-#     # plt.title(name)
-    
-#     # plt.tight_layout()
-#     # plt.show()
-#     # plt.close()
     #                         Saving and Loading
     #=========================================================================#
-    
-    def save(self, model_dir = './data/model/'):
+
+    def save(self, model_dir='./data/model/'):
         """
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
         os.makedirs(model_dir, exist_ok=True)
-        
+
         save(self.critic, model_dir + 'critic.pth')
         save(self.generator, model_dir + 'generator.pth')
-        
+
         optimizer_states = {
             'optimizer_c' : self.optimizer_c.state_dict(),
             'optimizer_g' : self.optimizer_g.state_dict()
