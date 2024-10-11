@@ -14,9 +14,9 @@ def random_transformation(LR_field, HR_field):
     Randomly selects a composition of axis flips and permutations and applies
     the transformation to both the given LR and HR fields.
     """
-    # random_flip = torch.randint(0, 2, (3,), dtype=torch.bool)
-    # LR_field = flip_tensor(LR_field, random_flip)
-    # HR_field = flip_tensor(HR_field, random_flip)
+    random_flip = torch.randint(0, 2, (3,), dtype=torch.bool)
+    LR_field = flip_tensor(LR_field, random_flip)
+    HR_field = flip_tensor(HR_field, random_flip)
     
     random_perm = torch.randperm(3)
     LR_field = permute_tensor(LR_field, random_perm)

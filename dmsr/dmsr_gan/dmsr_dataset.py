@@ -24,7 +24,7 @@ class DMSRDataset(Dataset):
         lr = self.lr_data[idx]
         hr = self.hr_data[idx]
 
-        # Apply augmentation (manual flip) if specified
+        # Apply augmentation (random flip/permutation) if specified
         if self.augment:
             lr, hr = random_transformation(lr, hr)
             

@@ -6,9 +6,9 @@ Created on Thu Oct 10 11:29:19 2024
 @author: brennan
 """
 
-import numpy as np
+import torch
 
-from numpy.fft import fftn, fftfreq
+from torch.fft import fftn, fftfreq
 from .field_operations.conversion import cic_density_field
 
 
@@ -33,29 +33,32 @@ def power_spectrum(density, box_size, grid_size):
     uncertainty : numpy array
         The uncertainty of the computed power spectrum.
     """
+    device = density.device
+    
     # Get the fourier transform of the density field.
     density_ft = fftn(density) / (grid_size**3)
-    power_spectrum_k = np.abs(density_ft)**2 * box_size**3 
+    power_spectrum_k = torch.abs(density_ft)**2 * box_size**3 
     
     # Compute the frequency arrays
-    ks = 2 * np.pi * fftfreq(grid_size, box_size/grid_size)
-    kx, ky, kz = np.meshgrid(ks, ks, ks, indexing='ij')
-    k = np.sqrt(kx**2 + ky**2 + kz**2)
+    ks = 2 * torch.pi * fftfreq(grid_size, box_size/grid_size, device=device)
+    kx, ky, kz = torch.meshgrid(ks, ks, ks, indexing='ij')
+    k = torch.sqrt(kx**2 + ky**2 + kz**2)
     
     # Radial bins
-    k_bins = np.linspace(0, np.max(k), num=grid_size//2)
+    k_bins = torch.linspace(0, torch.max(k), steps=grid_size//2, device=device)
     k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
     
     # Average the power spectrum over spherical shells
-    power_spectrum = np.zeros_like(k_bin_centers)
-    uncertainty = np.zeros_like(k_bin_centers)
+    power_spectrum = torch.zeros_like(k_bin_centers)
+    uncertainty = torch.zeros_like(k_bin_centers)
+    
     for i in range(len(k_bin_centers)):
         shell_mask = (k >= k_bins[i]) & (k < k_bins[i+1])
         power = power_spectrum_k[shell_mask] 
-        power *= k[shell_mask]**3 / (2 * np.pi**2)
+        power *= k[shell_mask]**3 / (2 * torch.pi**2)
         
-        power_spectrum[i] = np.mean(power)
-        uncertainty[i] = power_spectrum[i] / np.sqrt(np.sum(shell_mask))
+        power_spectrum[i] = torch.mean(power)
+        uncertainty[i] = power_spectrum[i] / torch.sqrt(torch.sum(shell_mask))
     
     return k_bin_centers, power_spectrum, uncertainty
 
@@ -71,7 +74,7 @@ def displacement_power_spectrum(
     cell_volume = cell_size**3
     
     # Compute the denisty field from the given displacement field.
-    density = cic_density_field(displacements, box_size).numpy()
+    density = cic_density_field(displacements, box_size)
     density = density[0, 0, ...] * particle_mass / cell_volume
     
     return power_spectrum(density, box_size, grid_size)

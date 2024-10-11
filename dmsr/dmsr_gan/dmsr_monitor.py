@@ -8,9 +8,12 @@ Created on Sun Sep 15 12:31:22 2024
 
 import os
 import time
+import torch
 import numpy as np
 
 from torch.nn import MSELoss
+from torch.utils.data import DataLoader
+from torch.utils.data import TensorDataset
 from ..analysis import displacement_power_spectrum
 
 
@@ -263,22 +266,18 @@ class UpscaleMonitor(BaseMonitor):
         ):
         """
         """
-        # TODO: make lr data have the right shape and is on cpu. Use a data
-        # loader
         self.lr_data = lr_data
         self.mass = particle_mass
         self.box_size = box_size
         self.grid_size = grid_size
-        self.hr_spectra = self.get_spectra(hr_data)
+        
+        hr_spectra = self.get_spectra(hr_data)
+        self.hr_spectra = hr_spectra
         
         
     def get_spectra(self, data):
         """
         """
-        # TODO: being able to compute the power spectrum on the device may lead 
-        # to a reduction in data transfers and a nice little speed up in epoch 
-        # post processing. This could be done using pytorch's fft 
-        # implementation.
         spectra = []
         for sample in data:
             sample = sample[None, ...]
@@ -286,7 +285,8 @@ class UpscaleMonitor(BaseMonitor):
                 sample, self.mass, self.box_size, self.grid_size
             )
             spectra.append(spectrum[1])
-        return np.stack(spectra)
+        
+        return torch.stack(spectra)
     
         
     def post_epoch_processing(self, epoch):
@@ -295,23 +295,26 @@ class UpscaleMonitor(BaseMonitor):
         sup_norm = 0
         
         for lr_sample, hr_spectrum in zip(self.lr_data, self.hr_spectra):
-            lr_sample = lr_sample.to(self.device)[None, ...]
+            lr_sample = lr_sample.to(self.device)
+            lr_sample = torch.unsqueeze(lr_sample, dim=0)
+            hr_spectrum = hr_spectrum.to(self.device)
+            
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z)
-            sr_sample = sr_sample.detach().cpu()
+            sr_sample = sr_sample.detach()
             
             sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
                 sr_sample, self.mass, self.box_size, self.grid_size
             )
             
             metric = self.spectral_metric(sr_spectrum, hr_spectrum)
-            sup_norm = max(sup_norm, metric)
+            sup_norm = max(sup_norm, metric.item())
             
         self.sup_norm.append(sup_norm)
         
         
     def spectral_metric(self, spectrum_a, spectrum_b):
-        return np.max(np.abs(spectrum_a - spectrum_b))
+        return torch.max(torch.abs(spectrum_a - spectrum_b))
 
 
 
