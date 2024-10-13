@@ -12,8 +12,6 @@ import torch
 import numpy as np
 
 from torch.nn import MSELoss
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
 from ..analysis import displacement_power_spectrum
 
 
@@ -50,7 +48,7 @@ class MonitorManager():
         self.epoch_start_time = time.time()
         self.batch_start_time = time.time()
         post_processing_time = time.time() - post_processing_start_time
-        print(f"[Post-processing took: {post_processing_time:.4f} sec]")
+        print(f"[Epoch post-processing took: {post_processing_time:.4f} sec]")
     
         
     def end_of_batch(self, epoch, batch, batch_counter, losses):
@@ -246,13 +244,18 @@ class UpscaleMonitor(BaseMonitor):
     
     def __init__(
             self, 
-            generator, 
+            gan, 
             realisations, 
-            device, 
+            device,
+            checkpoint_dir
         ):
-        self.generator = generator
+        self.gan = gan
+        self.generator = gan.generator
         self.realisations = realisations
         self.device = device
+        self.checkpoint_dir = checkpoint_dir
+        
+        self.current_best_norm = float('inf')
         self.sup_norm = []
     
         
@@ -288,7 +291,7 @@ class UpscaleMonitor(BaseMonitor):
         
         return torch.stack(spectra)
     
-        
+    
     def post_epoch_processing(self, epoch):
         """
         """
@@ -312,6 +315,18 @@ class UpscaleMonitor(BaseMonitor):
             
         self.sup_norm.append(sup_norm)
         
+        filename = 'sup_norm.npz'
+        np.savez(filename, **{
+            'sup_norm' : self.sup_norm
+        })
+        
+        if sup_norm < self.current_best_norm:
+            self.current_best_norm = sup_norm
+            
+            print(f"[Saving current best with sup norm {sup_norm:.8f}]")
+            checkpoint_name = 'best_model/'
+            self.gan.save(self.checkpoint_dir + checkpoint_name)
+    
         
     def spectral_metric(self, spectrum_a, spectrum_b):
         return torch.max(torch.abs(spectrum_a - spectrum_b))

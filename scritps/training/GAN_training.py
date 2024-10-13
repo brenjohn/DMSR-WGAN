@@ -68,7 +68,7 @@ LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 # TODO: The four below depends on scale factor. Maybe this should be read from
 # dataset somehow or metadata.
 lr_padding = 3
-# LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
+# LR_data, HR_data = LR_data[:16, ...], HR_data[:16, ...]
 
 dataset = DMSRDataset(
     LR_data.float(), HR_data.float(), augment=True
@@ -130,9 +130,10 @@ monitors = {
 
 realisations = 1
 upscaling_monitor = UpscaleMonitor(
-    generator,
+    gan,
     realisations,
-    device
+    device,
+    checkpoint_dir = './data/checkpoints/'
 )
 
 

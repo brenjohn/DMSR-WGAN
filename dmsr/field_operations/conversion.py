@@ -25,9 +25,9 @@ def displacements_to_positions(displacements, box_length):
     return positions
 
 
-def cic_density_field(displacements, box_size):
+def cic_density_field(displacements, box_size, grid_size=None):
     batch_size = displacements.shape[0]
-    grid_size = displacements.shape[-1]
+    grid_size = displacements.shape[-1] if grid_size is None else grid_size
     device = displacements.device
     cell_size = box_size / grid_size
     
@@ -43,7 +43,8 @@ def cic_density_field(displacements, box_size):
     # Compute the weights (1 - dx) * (1 - dy) * (1 - dz)
     positions = torch.unsqueeze(positions, dim=-2)
     grid_positions = torch.unsqueeze(grid_positions, dim=-2)
-    neighbours = (arange(8, device=device)[:, None] >> arange(2, -1, -1, device=device)) & 1
+    neighbours = arange(8, device=device)[:, None]
+    neighbours = (neighbours >> arange(2, -1, -1, device=device)) & 1
     neighbour_positions = grid_positions + neighbours
     weights = 1 - torch.abs(positions - neighbour_positions)
     weights = torch.prod(weights, -1)

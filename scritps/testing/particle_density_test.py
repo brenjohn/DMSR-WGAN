@@ -28,7 +28,7 @@ HR_data = HR_data[:1, ...]
 
 
 #%% Creating a scatter plot of particle positions.
-def plot_positions(positions):
+def plot_positions(positions, box_size):
     positions = torch.transpose(positions, 1, -1)
     positions = positions.reshape((-1, 3))
     xs = positions[:, 0]
@@ -36,18 +36,21 @@ def plot_positions(positions):
     
     plt.Figure(figsize=(8, 8))
     plt.scatter(xs, ys, alpha=0.2, s=0.1)
+    plt.xlim(0, box_size)
+    plt.ylim(0, box_size)
+    plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()
     plt.close()
 
 HR_positions = displacements_to_positions(HR_data, box_size)
-plot_positions(HR_positions)
+plot_positions(HR_positions, box_size)
 
 
 
 #%% Create heat map of cic density field
 ti = time.time()
-density = cic_density_field(HR_data, box_size)
+density = cic_density_field(HR_data, box_size, 128)
 print(f'cic time: {time.time() - ti}')
 density = density[0, 0, :, :, :]
 density = torch.sum(density, axis=-1)
