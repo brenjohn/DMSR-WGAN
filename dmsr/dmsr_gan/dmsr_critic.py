@@ -14,72 +14,178 @@ from ..field_operations.resize import crop
 
 
 class DMSRCritic(nn.Module):
+    """The DMSR critic model for the DMSR WGAN.
+    """
     
-    def __init__(self, 
-                 grid_size, 
-                 channels,
-                 **kwargs):
+    def __init__(
+            self,
+            density_size,
+            displacement_size,
+            density_channels,
+            displacement_channels,
+            **kwargs
+        ):
         super().__init__()
-
-        self.input_size = grid_size
-        self.block0 = nn.Sequential(
-            nn.Conv3d(8, channels, 1),
-            nn.PReLU(),
-        )
-
-        self.blocks = nn.ModuleList()
-        size = grid_size
-        channels_curr = channels
+        self.density_size = density_size
+        self.displacement_size = displacement_size
+        self.density_channels = density_channels
+        self.displacement_channels = displacement_channels
+        
+        self.build_critic_components()
+        
+        
+    def layer_channels_and_sizes(self):
+        """Compute the input and output channels, along with the output sizes 
+        of the residual blocks to be used in the critic model.
+        
+        Returns two lists for the denisty and main branches of the model
+        containing (channel_in, channel_out, out_size) tuples for each residual
+        block in each branch.
+        """
+        
+        # Density residual blocks
+        density_size = self.density_size
+        displacement_size = self.displacement_size
+        channels_curr = self.density_channels
         channels_next = channels_curr * 2
+        
+        density_blocks = []
+        while density_size > displacement_size:
+            density_size = (density_size - 4)//2
+            density_blocks.append(
+                (channels_curr, channels_next, density_size)
+            )
+            
+            channels_curr = channels_next
+            channels_next = channels_curr * 2
+            
+            if density_size < displacement_size:
+                raise('Density size incompatiable with displacement size')
+        
+        
+        # Main residual blocks
+        size = displacement_size
+        channels_curr = self.displacement_channels + channels_curr
+        channels_next = channels_curr * 2
+        
+        main_blocks = []
         while size >= 10:
-            self.blocks.append(ResidualBlock(channels_curr, channels_next))
-            size = size // 2
+            size = (size - 4) // 2
+            main_blocks.append(
+                (channels_curr, channels_next, size)
+            )
             channels_curr = channels_next
             channels_next = channels_curr * 2
         
         
-        self.block9 = nn.Sequential(
-            nn.Conv3d(channels_curr, channels_next, 1),
+        return density_blocks, main_blocks
+        
+        
+    def build_critic_components(self):
+        """Create the neural network components of the dmsr critic model.
+        
+        The model consists of of two branchs; a density branch that downscales
+        the given density data to the same resolution as the displacement data,
+        and a main branch for computing the score for the given denisty and
+        displacement data. Initial blocks are used to create the initial 
+        channels for the density and displacement data. Finally, an aggregation 
+        block is used to reduce the output to a single number.
+    
+        (SR_density, LR_density)                     <--- Density Input
+                   |
+             Density Block
+                   |
+                   |
+                   |    (SR_data, LR_data)           <--- Displacement Input
+                   |             |
+                   |       Initial Block
+                   |             |
+                   |-----------concat
+                                 |
+                          Residual Block
+                                 |
+                          Residual Block
+                                 :
+                                 :
+                         Aggregation Block
+                                 |
+                           (Critic score)            <---- Output
+        """
+        density_channels, main_channels = self.layer_channels_and_sizes()
+        
+        density_initial_channels = self.density_channels
+        displacement_initial_channels = self.displacement_channels
+        
+        self.density_initial_block = nn.Sequential(
+            nn.Conv3d(2, density_initial_channels, 1),
             nn.PReLU(),
         )
         
-        self.block10 = nn.Conv3d(channels_next, 1, 1)
-        self.pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.density_blocks = nn.ModuleList()
+        for channel_in, channel_out, size in density_channels:
+            self.density_blocks.append(
+                ResidualBlock(channel_in, channel_out)
+            )
+        
+        self.displacement_initial_block = nn.Sequential(
+            nn.Conv3d(6, displacement_initial_channels, 1),
+            nn.PReLU(),
+        )
+
+        self.main_blocks = nn.ModuleList()
+        for channel_in, channel_out, size in main_channels:
+            self.main_blocks.append(
+                ResidualBlock(channel_in, channel_out)
+            )
+        
+        self.aggregate_block = nn.Sequential(
+            nn.Conv3d(channel_out, channel_out, 1),
+            nn.PReLU(),
+            nn.Conv3d(channel_out, 1, 1),
+            nn.AdaptiveAvgPool3d((1, 1, 1))
+        )
 
 
-    def forward(self, x):
+    def forward(self, displacements, densities):
         
-        x = self.block0(x)
+        y = self.density_initial_block(densities)
+        for block in self.density_blocks:
+            y = block(y)
         
-        for block in self.blocks:
+        x = self.displacement_initial_block(displacements)
+        x = torch.cat([x, y], dim=1)
+        for block in self.main_blocks:
             x = block(x)
 
-        x = self.block9(x)
-        x = self.block10(x)
-        x = self.pool(x)
+        x = self.aggregate_block(x)
 
         return x.flatten()
     
     
 
 class ResidualBlock(nn.Module):
-    """Residual convolution blocks of the form specified by `seq`.
-    Input, via a skip connection, is added to the residual followed by an
-    optional activation.
-
-    The skip connection is identity if `out_chan` is omitted, otherwise it uses
-    a size 1 "convolution", i.e. one can trigger the latter by setting
-    `out_chan` even if it equals `in_chan`.
-
-    A trailing `'A'` in seq can either operate before or after the addition,
-    depending on the boolean value of `last_act`, defaulting to `seq[-1] == 'A'`
-
-    See `ConvStyledBlock` for `seq` types.
+    """Residual convolution blocks have the following structure:
+    
+                 x
+                 |-------------------->|
+                 |                     |
+          Convolution (3x3x3)  Convolution (1x1x1)
+                 |                     |
+          Convolution (3x3x3)          |
+                 |                     |
+                 + <-------------------|
+                 |
+             Downsample
+                 |
+                 x
+    
+    Note, The output tensor has size given by:
+        next_size = (prev_size - 4) / 2
+    where odd sizes are rounded down by the downsampling method.
     """
+    
     def __init__(self, channels_curr, channels_next):
-
         super().__init__()
-        
         self.skip = nn.Conv3d(channels_curr, channels_next, 1)
         self.convs = nn.Sequential(
             nn.Conv3d(channels_curr, channels_curr, 3),
