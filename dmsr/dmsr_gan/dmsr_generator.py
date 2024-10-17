@@ -15,31 +15,64 @@ from ..field_operations.resize import crop
 
 
 class DMSRGenerator(nn.Module):
+    """The DMSR generator model for the DMSR WGAN.
+    """
     
     def __init__(self,
                  grid_size,
-                 channels, 
+                 channels,
+                 crop_size=0,
                  scale_factor=8,
                  **kwargs
         ):
         super().__init__()
-        
-        self.grid_size = grid_size
+        self.grid_size    = grid_size
+        self.channels     = channels
         self.scale_factor = scale_factor
+        self.crop_size    = crop_size
+        
+        self.build_generator_components()
 
-        self.block0 = nn.Sequential(
-            nn.Conv3d(3, channels, 3),
+
+    def build_generator_components(self):
+        """Create the neural network components of the dmsr generator model.
+        
+        The model consists of an initial block to increase the number of input
+        channels and a sequence of H-blocks to upscale the data. The output
+        of the final H-block is cropped by a specified amount before being
+        returned.
+        
+                            (LR-data)
+                                |-----------|
+                        (Initial-block)     | skip
+                                |    -------|
+                                |    |
+                               (H-Block)
+                                |    |
+                               (H-Block)
+                                |    |
+                                   :
+                                |    |
+                               (H-Block)
+                                |    |
+                                -    |
+                                   (crop)
+                                     |
+                                  (output)
+        """
+        self.initial_block = nn.Sequential(
+            nn.Conv3d(3, self.channels, 1),
             nn.PReLU(),
         )
         
         scale = 1
-        curr_chan = channels
+        curr_chan = self.channels
         next_chan = curr_chan // 2
-        N = grid_size - 2
+        N = self.grid_size
         noise_shapes = []
         
         self.blocks = nn.ModuleList()
-        while scale < scale_factor:
+        while scale < self.scale_factor:
             self.blocks.append(
                 HBlock(curr_chan, next_chan)
             )
@@ -49,27 +82,27 @@ class DMSRGenerator(nn.Module):
             next_chan = curr_chan // 2
             noise_shapes.append((N, 2 * N - 2))
             N = 2 * N - 4
-            
-        # TODO: the -4 comes from the crop at the end of the forward pass, this
-        # should be set by the user.
-        self.output_size = N - 4
+        
+        
+        self.output_size = N - 2 * self.crop_size
         self.noise_shapes = noise_shapes
 
 
     def forward(self, x, z):
-        y = crop(x, 1)
-        x = self.block0(x)
-
+        y = x
+        x = self.initial_block(x)
         for block, noise in zip(self.blocks, z):
             x, y = block(x, y, noise)
         
-        # TODO: This crop size should be configured by the user.
-        y = crop(y, 2)
+        if self.crop_size:
+            y = crop(y, self.crop_size)
+        
         return y
     
     
     def sample_latent_space(self, batch_size, device):
-        
+        """Returns a sample from the latent space.
+        """
         latent_variable = [None] * len(self.noise_shapes)
         for i, (shape_A, shape_B) in enumerate(self.noise_shapes):
             shape_A = (batch_size, 1) + 3 * (shape_A,)
@@ -78,6 +111,7 @@ class DMSRGenerator(nn.Module):
             latent_variable[i] = noise
             
         return latent_variable
+
 
 
 class HBlock(nn.Module):

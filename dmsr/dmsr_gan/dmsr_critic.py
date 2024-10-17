@@ -22,14 +22,14 @@ class DMSRCritic(nn.Module):
             density_size,
             displacement_size,
             density_channels,
-            displacement_channels,
+            main_channels,
             **kwargs
         ):
         super().__init__()
         self.density_size = density_size
         self.displacement_size = displacement_size
         self.density_channels = density_channels
-        self.displacement_channels = displacement_channels
+        self.main_channels = main_channels
         
         self.build_critic_components()
         
@@ -65,7 +65,7 @@ class DMSRCritic(nn.Module):
         
         # Main residual blocks
         size = displacement_size
-        channels_curr = self.displacement_channels + channels_curr
+        channels_curr = self.main_channels
         channels_next = channels_curr * 2
         
         main_blocks = []
@@ -100,7 +100,7 @@ class DMSRCritic(nn.Module):
                    |             |
                    |       Initial Block
                    |             |
-                   |-----------concat
+                   |---------> concat
                                  |
                           Residual Block
                                  |
@@ -111,29 +111,28 @@ class DMSRCritic(nn.Module):
                                  |
                            (Critic score)            <---- Output
         """
-        density_channels, main_channels = self.layer_channels_and_sizes()
-        
-        density_initial_channels = self.density_channels
-        displacement_initial_channels = self.displacement_channels
+        density_layers, main_layers = self.layer_channels_and_sizes()
         
         self.density_initial_block = nn.Sequential(
-            nn.Conv3d(2, density_initial_channels, 1),
+            nn.Conv3d(2, self.density_channels, 1),
             nn.PReLU(),
         )
         
+        # Note: channel_out = density_channels if density_channels is empty.
+        channel_out = self.density_channels
         self.density_blocks = nn.ModuleList()
-        for channel_in, channel_out, size in density_channels:
+        for channel_in, channel_out, size in density_layers:
             self.density_blocks.append(
                 ResidualBlock(channel_in, channel_out)
             )
         
-        self.displacement_initial_block = nn.Sequential(
-            nn.Conv3d(6, displacement_initial_channels, 1),
+        self.main_initial_block = nn.Sequential(
+            nn.Conv3d(6 + channel_out, self.main_channels, 1),
             nn.PReLU(),
         )
 
         self.main_blocks = nn.ModuleList()
-        for channel_in, channel_out, size in main_channels:
+        for channel_in, channel_out, size in main_layers:
             self.main_blocks.append(
                 ResidualBlock(channel_in, channel_out)
             )
@@ -152,8 +151,8 @@ class DMSRCritic(nn.Module):
         for block in self.density_blocks:
             y = block(y)
         
-        x = self.displacement_initial_block(displacements)
-        x = torch.cat([x, y], dim=1)
+        x = torch.cat([displacements, y], dim=1)
+        x = self.main_initial_block(x)
         for block in self.main_blocks:
             x = block(x)
 
