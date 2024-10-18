@@ -10,72 +10,101 @@ import sys
 sys.path.append("..")
 sys.path.append("../..")
 
-import os
-import tensorflow as tf
-
-# Enable detailed logging of retracing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
-tf.get_logger().setLevel('INFO')
-
-import tensorflow.keras as keras
-import numpy as np
 import time
+import torch
+import torch.optim as optim
 
-from dmsr.models.dmsr_gan.dmsr_gan import build_dmsrgan
+from torch.utils.data import DataLoader
 
+from dmsr.dmsr_gan.dmsr_wgan import DMSRWGAN
+from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
+from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
 
-#%% Create the GAN.
-gan_args = { 
-    'LR_grid_size'       : int(20),
-    'scale_factor'       : 2,
-    'HR_box_size'        : 1.0,
-    'generator_channels' : 256,
-    'critic_channels'    : 32
-}
-
-gan = build_dmsrgan(**gan_args)
+from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
 
 
-#%%
-gan_training_args = {
-    'critic_optimizer'    : keras.optimizers.Adam(
-        learning_rate=0.00002, beta_1=0.0, beta_2=0.99 , weight_decay=0.000001
-    ),
-    'generator_optimizer' : keras.optimizers.Adam(
-        learning_rate=0.00001, beta_1=0.0, beta_2=0.99
-    ),
-    'critic_steps' : 2,
-    'gp_weight'    : 10.0,
-    'gp_rate'      : 1,
-}
-
-gan.compile(**gan_training_args)
+# Check if CUDA is available and set the device
+gpu_id = 0
+device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 
-#%%
-LR_size = gan.generator.input[0].shape[-1]
-HR_size = gan.generator.output.shape[-1]
+#=============================================================================#
+#                      Generator and Critic Models
+#=============================================================================#
+lr_grid_size       = 20
+generator_channels = 8 
+crop_size          = 0
+scale_factor       = 2
 
-LR_data = tf.random.normal((1, 3, LR_size, LR_size, LR_size))
-US_data = tf.random.normal((1, 4, HR_size, HR_size, HR_size))
-HR_data = tf.random.normal((1, 3, HR_size, HR_size, HR_size))
+generator = DMSRGenerator(
+    lr_grid_size, generator_channels, crop_size, scale_factor
+)
+
+hr_grid_size      = generator.output_size
+density_size      = 2 * hr_grid_size + 4
+displacement_size = hr_grid_size
+density_channels  = 4
+main_channels     = 8
+
+critic = DMSRCritic(
+    density_size, displacement_size, density_channels, main_channels
+)
+
+generator.to(device)
+critic.to(device)
+
+
+#=============================================================================#
+#                              Optimizers
+#=============================================================================#
+b1 = 0.0
+b2 = 0.99
+
+lr_G = 0.00001
+optimizer_g = optim.Adam(generator.parameters(), lr=lr_G, betas=(b1, b2))
+
+lr_C = 0.00002
+optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
+
+
+#=============================================================================#
+#                           Training Dataset
+#=============================================================================#
+data_directory = '../../data/dmsr_training/'
+batch_size = 2
+box_size = 1
+lr_padding = 1
+
+
+lr_data = torch.randn(
+    (batch_size, 3, lr_grid_size, lr_grid_size, lr_grid_size)
+).float()
+
+hr_data = torch.randn(
+    (batch_size, 3, hr_grid_size, hr_grid_size, hr_grid_size)
+).float()
+
+
+dataset = DMSRDataset(
+    lr_data, hr_data, augment=True
+)
+
+dataloader = DataLoader(
+    dataset, batch_size=batch_size, shuffle=True, drop_last=True
+)
+
+
+#=============================================================================#
+#                              DMSR WGAN
+#=============================================================================#
+gan = DMSRWGAN(generator, critic, device)
+gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
+gan.set_optimizer(optimizer_c, optimizer_g)
+
 
 #%%
 ti = time.time()
-gan.critic_train_step(LR_data, US_data, HR_data)
-time_critic_step = time.time() - ti
-print('Critic step took :', time_critic_step)
-
-
-#%%
-ti = time.time()
-gan.generator_train_step(LR_data, US_data)
-time_generator_step = time.time() - ti
-print('Generator step took :', time_generator_step)
-
-
-#%%
-ti = time.time()
-gan.train_step((LR_data, HR_data))
-time_gan_step = time.time() - ti
-print('GAN step took :', time_gan_step)
+gan.train_step(lr_data, hr_data)
+time_train_step = time.time() - ti
+print('train step took :', time_train_step)

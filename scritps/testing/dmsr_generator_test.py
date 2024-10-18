@@ -38,7 +38,7 @@ displacement_size = 20
 
 lr_sample = torch.randn(
     (batch_size, 3, displacement_size, displacement_size, displacement_size)
-).requires_grad_(True)
+)
 
 z = generator.sample_latent_space(batch_size, device)
 

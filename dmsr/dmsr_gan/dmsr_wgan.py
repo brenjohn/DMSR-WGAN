@@ -146,7 +146,7 @@ class DMSRWGAN:
         """Train step for the critic.
         """
         self.optimizer_c.zero_grad()
-        us_density, us_batch = us_batch
+        us_batch, us_density = us_batch
         density_size = self.critic.density_size
         
         # Create fake data using the generator.
@@ -225,7 +225,7 @@ class DMSRWGAN:
         """Train step for the generator.
         """
         self.optimizer_g.zero_grad()
-        us_density, us_batch = us_batch
+        us_batch, us_density = us_batch
         density_size = self.critic.density_size
         
         # Use the generator to create fake data.
