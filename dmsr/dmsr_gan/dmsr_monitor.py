@@ -293,8 +293,10 @@ class UpscaleMonitor(BaseMonitor):
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         
-        self.current_best_metric = float('inf')
-        self.uniform_metric = []
+        self.current_best_uniform_metric = float('inf')
+        self.uniform_metric_history = []
+        self.current_best_l2_metric = float('inf')
+        self.l2_metric_history = []
     
         
     def set_data_set(
@@ -337,6 +339,8 @@ class UpscaleMonitor(BaseMonitor):
         model.
         """
         uniform_metric = 0
+        l2_metric = 0
+        
         for lr_sample, hr_spectrum in zip(self.lr_data, self.hr_spectra):
             # Move the low resolution displacement data and corresponding high
             # resolution power spectrum to the device.
@@ -359,27 +363,44 @@ class UpscaleMonitor(BaseMonitor):
             metric = self.uniform_metric(sr_spectrum, hr_spectrum)
             uniform_metric = max(uniform_metric, metric.item())
             
+            # Compute the L2 metric between the real and fake spectra.
+            metric = self.l2_metric(sr_spectrum, hr_spectrum)
+            l2_metric += metric.item()
         
-        # Save the new uniform metric value.
-        self.uniform_metric.append(uniform_metric)
-        filename = 'power_spectra_uniform_metric.npz'
+        l2_metric /= len(self.lr_data)
+        
+        # Save the new metric values.
+        self.uniform_metric_history.append(uniform_metric)
+        self.l2_metric_history.append(l2_metric)
+        filename = 'power_spectra_metrics.npz'
         np.savez(filename, **{
-            'uniform_metric' : self.uniform_metric
+            'uniform_metric' : self.uniform_metric_history,
+            'l2_metric' : self.l2_metric_history
         })
         
-        # If the current uniform metric is better than the best one found so
-        # far then replace the best checkpoint with a checkpoint of the current
-        # model.
-        if uniform_metric < self.current_best_metric:
-            self.current_best_metric = uniform_metric
+        # If the current metric is better than the best one found so far then
+        # replace the best checkpoint with a checkpoint of the current model.
+        if uniform_metric < self.current_best_uniform_metric:
+            self.current_best_uniform_metric = uniform_metric
             
             print(f"[Current best uniform metric {uniform_metric:.8f}]")
-            checkpoint_name = 'best_model/'
+            checkpoint_name = 'best_uniform_model/'
+            self.gan.save(self.checkpoint_dir + checkpoint_name)
+            
+        if l2_metric < self.current_best_l2_metric:
+            self.current_best_l2_metric = l2_metric
+            
+            print(f"[Current best l2 metric {l2_metric:.8f}]")
+            checkpoint_name = 'best_l2_model/'
             self.gan.save(self.checkpoint_dir + checkpoint_name)
     
         
     def uniform_metric(self, spectrum_a, spectrum_b):
         return torch.max(torch.abs(spectrum_a - spectrum_b))
+    
+    
+    def l2_metric(self, spectrum_a, spectrum_b):
+        return torch.sum((spectrum_a - spectrum_b) ** 2)**0.5
 
 
 

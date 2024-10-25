@@ -83,7 +83,6 @@ class DMSRGenerator(nn.Module):
             noise_shapes.append((N, 2 * N - 2))
             N = 2 * N - 4
         
-        
         self.output_size = N - 2 * self.crop_size
         self.noise_shapes = noise_shapes
 
