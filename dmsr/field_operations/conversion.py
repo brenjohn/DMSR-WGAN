@@ -26,6 +26,8 @@ def displacements_to_positions(displacements, box_length):
 
 
 def cic_density_field(displacements, box_size, grid_size=None):
+    displacements = displacements - displacements.mean((2, 3, 4), keepdims=True)
+    
     batch_size = displacements.shape[0]
     grid_size = displacements.shape[-1] if grid_size is None else grid_size
     device = displacements.device
