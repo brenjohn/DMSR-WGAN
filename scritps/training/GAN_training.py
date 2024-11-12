@@ -32,19 +32,31 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-LR_grid_size, generator_channels, scale_factor = 20, 8, 4
-generator = DMSRGenerator(LR_grid_size, generator_channels, scale_factor)
+lr_grid_size       = 20
+generator_channels = 64 
+crop_size          = 2
+scale_factor       = 2
 
-critic_size = generator.output_size
-critic_channels = 8
-critic = DMSRCritic(critic_size, critic_channels)
+generator = DMSRGenerator(
+    lr_grid_size, generator_channels, crop_size, scale_factor
+)
+
+hr_grid_size      = generator.output_size
+density_size      = hr_grid_size
+displacement_size = hr_grid_size
+density_channels  = 16
+main_channels     = 64
+
+critic = DMSRCritic(
+    density_size, displacement_size, density_channels, main_channels
+)
 
 generator.to(device)
 critic.to(device)
 
 
 #=============================================================================#
-#                               Optimizers
+#                              Optimizers
 #=============================================================================#
 b1 = 0.0
 b2 = 0.99
@@ -67,8 +79,7 @@ LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
 # TODO: The four below depends on scale factor. Maybe this should be read from
 # dataset somehow or metadata.
-lr_padding = 3
-# LR_data, HR_data = LR_data[:16, ...], HR_data[:16, ...]
+lr_padding = 2
 
 dataset = DMSRDataset(
     LR_data.float(), HR_data.float(), augment=True
@@ -86,10 +97,6 @@ data_directory = '../../data/dmsr_validation/'
 
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
-# LR_data, HR_data = LR_data[:2, ...], HR_data[:2, ...]
-
-# valid_dataset = DMSRDataset(LR_data.float(), HR_data.float())
-# valid_dataloader = DataLoader(valid_dataset, batch_size=1)
 
 
 #=============================================================================#
@@ -107,8 +114,8 @@ from dmsr.dmsr_gan.dmsr_monitor import MonitorManager, LossMonitor
 from dmsr.dmsr_gan.dmsr_monitor import SamplesMonitor, CheckpointMonitor
 from dmsr.dmsr_gan.dmsr_monitor import UpscaleMonitor
 
-lr_sample = LR_data[1:2, ...].float()
-hr_sample = HR_data[1:2, ...].float()
+lr_sample = LR_data[2:3, ...].float()
+hr_sample = HR_data[2:3, ...].float()
 lr_box_size = 20 * box_size / 16
 hr_box_size = box_size
 
@@ -157,13 +164,12 @@ gan.set_monitor(monitor_manager)
 #=============================================================================#
 #                         Supervised Training
 #=============================================================================#
+#%%
 # from dmsr.dmsr_gan.dmsr_monitor import SupervisedValidator
 
 # supervised_epochs = 5
 # validator = SupervisedValidator(generator, valid_dataloader, device)
 
-
-#%%
 # gan.train(
 #     supervised_epochs, 
 #     train_step = gan.generator_supervised_step, 
@@ -171,27 +177,14 @@ gan.set_monitor(monitor_manager)
 # )
 # gan.train(5, train_step=gan.critic_supervised_step)
 
-#%%
-# import numpy as np
-# import matplotlib.pyplot as plt
-
-# plt.plot([np.sum(monitor.generator_loss[128*n:128*(n+1)])/128 for n in range(20)])
-# plt.plot(validator.generator_valid_losses)
-
-
 
 #=============================================================================#
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 2 # 1024 * 6
+num_epochs = 1024
 gan.train(num_epochs)
 
 
 #%%
 # gan.load('./data/checkpoints/current_model/')
-
-#%%
-dataloader = DataLoader(
-    LR_data.float(), batch_size=1
-)

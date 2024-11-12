@@ -74,7 +74,7 @@ def displacement_power_spectrum(
     cell_volume = cell_size**3
     
     # Compute the denisty field from the given displacement field.
-    density = cic_density_field(displacements, box_size)
+    density = cic_density_field(displacements, box_size, grid_size)
     density = density[0, 0, ...] * particle_mass / cell_volume
     
     return power_spectrum(density, box_size, grid_size)
