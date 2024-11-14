@@ -10,6 +10,7 @@ import torch
 
 from torch import arange
 
+
 def displacements_to_positions(displacements, box_length):
     device = displacements.device
     grid_size = displacements.shape[-1]

@@ -157,7 +157,9 @@ class LossMonitor(BaseMonitor):
     models during WGAN training.
     """
     
-    def __init__(self):
+    def __init__(self, data_dir='./data/'):
+        self.data_dir = data_dir
+        
         self.critic_loss       = []
         self.critic_batches    = []
         self.generator_loss    = []
@@ -212,7 +214,7 @@ class LossMonitor(BaseMonitor):
     
     
     def save_losses(self):
-        filename = 'losses.npz'
+        filename = self.data_dir + 'losses.npz'
         np.savez(filename, **{
             'critic_loss'       : self.critic_loss,
             'critic_batches'    : self.critic_batches,
@@ -236,7 +238,8 @@ class SamplesMonitor(BaseMonitor):
             hr_sample, 
             lr_box_size, 
             hr_box_size,
-            device
+            device,
+            samples_dir = './data/samples/'
         ):
         
         self.lr_sample = lr_sample
@@ -252,7 +255,7 @@ class SamplesMonitor(BaseMonitor):
         z = generator.sample_latent_space(batch_size, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
-        self.samples_dir = './data/samples/'
+        self.samples_dir = samples_dir
         os.makedirs(self.samples_dir, exist_ok=True)
         np.save(self.samples_dir + 'lr_sample.npy', lr_sample.numpy())
         np.save(self.samples_dir + 'hr_sample.npy', hr_sample.numpy())
@@ -383,15 +386,19 @@ class UpscaleMonitor(BaseMonitor):
         if uniform_metric < self.current_best_uniform_metric:
             self.current_best_uniform_metric = uniform_metric
             
-            print(f"[Current best uniform metric {uniform_metric:.8f}]")
-            checkpoint_name = 'best_uniform_model/'
+            print(f"[Current best uniform metric {uniform_metric:.4f}]")
+            checkpoint_name = 'best_uniform_model'
+            checkpoint_name += f'_epoch={epoch}'
+            checkpoint_name += f'_{uniform_metric:.4f}/'
             self.gan.save(self.checkpoint_dir + checkpoint_name)
             
         if l2_metric < self.current_best_l2_metric:
             self.current_best_l2_metric = l2_metric
             
-            print(f"[Current best l2 metric {l2_metric:.8f}]")
-            checkpoint_name = 'best_l2_model/'
+            print(f"[Current best l2 metric {l2_metric:.4f}]")
+            checkpoint_name = 'best_l2_model'
+            checkpoint_name += f'_epoch={epoch}'
+            checkpoint_name += f'_{l2_metric:.4f}/'
             self.gan.save(self.checkpoint_dir + checkpoint_name)
     
         

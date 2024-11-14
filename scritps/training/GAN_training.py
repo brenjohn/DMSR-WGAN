@@ -106,6 +106,8 @@ gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
 gan.set_optimizer(optimizer_c, optimizer_g)
 
+# gan.load('./level_0_run/checkpoints/current_model/')
+
 
 #=============================================================================#
 #                               Monitor
@@ -119,19 +121,24 @@ hr_sample = HR_data[2:3, ...].float()
 lr_box_size = 20 * box_size / 16
 hr_box_size = box_size
 
+output_dir     = './level_0_restart/'
+checkpoint_dir = output_dir + 'checkpoints/'
+samples_dir    = output_dir + 'samples/'
+
 monitors = {
-    'loss_monitor' : LossMonitor(),
+    'loss_monitor' : LossMonitor(output_dir),
     
     'samples_monitor' : SamplesMonitor(
         generator, 
         lr_sample, hr_sample, 
         lr_box_size, hr_box_size, 
-        device
+        device,
+        samples_dir = samples_dir
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
         gan,
-        checkpoint_dir = './data/checkpoints/'
+        checkpoint_dir = checkpoint_dir
     )
 }
 
@@ -140,7 +147,7 @@ upscaling_monitor = UpscaleMonitor(
     gan,
     realisations,
     device,
-    checkpoint_dir = './data/checkpoints/'
+    checkpoint_dir = checkpoint_dir
 )
 
 
@@ -164,7 +171,6 @@ gan.set_monitor(monitor_manager)
 #=============================================================================#
 #                         Supervised Training
 #=============================================================================#
-#%%
 # from dmsr.dmsr_gan.dmsr_monitor import SupervisedValidator
 
 # supervised_epochs = 5
@@ -182,9 +188,5 @@ gan.set_monitor(monitor_manager)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1024
+num_epochs = 2
 gan.train(num_epochs)
-
-
-#%%
-# gan.load('./data/checkpoints/current_model/')
