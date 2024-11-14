@@ -375,7 +375,7 @@ class UpscaleMonitor(BaseMonitor):
         # Save the new metric values.
         self.uniform_metric_history.append(uniform_metric)
         self.l2_metric_history.append(l2_metric)
-        filename = 'power_spectra_metrics.npz'
+        filename = self.checkpoint_dir + 'power_spectra_metrics.npz'
         np.savez(filename, **{
             'uniform_metric' : self.uniform_metric_history,
             'l2_metric' : self.l2_metric_history
