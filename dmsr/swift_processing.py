@@ -11,9 +11,8 @@ import h5py as h5
 import numpy as np
 
 def get_displacement_field(positions, ids, box_size, grid_size):
-    """
-    Creates a displacement field from the given particle positions and particle
-    IDs.
+    """Creates a displacement field from the given particle positions and
+    particle IDs.
     
     Displacements of particles are relative to associated points on a regular
     grid. Particles are associated with grid points by the following relation
@@ -45,9 +44,8 @@ def get_displacement_field(positions, ids, box_size, grid_size):
 
 
 def get_positions(displacement_field, box_size, grid_size, periodic=True):
-    """
-    Creates an array containing the absolute coordinates of particles from the
-    given displacement field.
+    """Creates an array containing the absolute coordinates of particles from 
+    the given displacement field.
     """
     points = np.arange(0, box_size, box_size/grid_size)
     grid = np.stack(np.meshgrid(points, points, points, indexing='ij'))
@@ -61,9 +59,9 @@ def get_positions(displacement_field, box_size, grid_size, periodic=True):
     return positions
 
 
+# TODO: in the interest of reuability, this should read a single snapshot.
 def read_snapshot(snapshots):
-    """
-    Returns displacement fields from the given list of snapshots.
+    """Returns displacement fields from the given list of snapshots.
     """
     displacement_fields = []
     
