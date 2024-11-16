@@ -275,12 +275,23 @@ class DMSRWGAN:
         
         
     def load(self, checkpoint_dir):
+        # Load the saved critic and generator models.
         self.critic = load(checkpoint_dir + 'critic.pth')
         self.generator = load(checkpoint_dir + 'generator.pth')
         
+        # Here we create new instances of the optimizers to update the weights
+        # of the new models just created.
+        optimizer_type = type(self.optimizer_c)
+        self.optimizer_c = optimizer_type(self.critic.parameters())
+        
+        optimizer_type = type(self.optimizer_g)
+        self.optimizer_g = optimizer_type(self.generator.parameters())
+        
+        # Now load the saved state of the optimizers.
         optimizer_states = load(checkpoint_dir + 'optimizers.pth')
         self.optimizer_c.load_state_dict(optimizer_states['optimizer_c'])
         self.optimizer_g.load_state_dict(optimizer_states['optimizer_g'])
         
+        # Load any additional attributes that were saved.
         attributes = load(checkpoint_dir + 'attributes.pth')
         vars(self).update(attributes)
