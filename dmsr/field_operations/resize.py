@@ -56,3 +56,21 @@ def cut_field(fields, cut_size, stride=0, pad=0):
                 cuts.append(patch)
     
     return np.concatenate(cuts)
+
+
+
+def stitch_fields(patches, patches_per_dim):
+    
+    patch_size = patches[0].shape[-1]
+    field_size = patch_size * patches_per_dim
+    field = np.zeros((3, field_size, field_size, field_size))
+    
+    for n, patch in enumerate(patches):
+        i = n // patches_per_dim**2
+        j = (n % patches_per_dim**2) // patches_per_dim
+        k = n % patches_per_dim
+        
+        N = patch_size
+        field[:, i*N:(i+1)*N, j*N:(j+1)*N, k*N:(k+1)*N] = patch
+        
+    return field
