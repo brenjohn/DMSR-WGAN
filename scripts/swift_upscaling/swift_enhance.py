@@ -17,8 +17,8 @@ import shutil
 import h5py as h5
 import numpy as np
 
-from dmsr.swift_processing import get_displacement_field
-from dmsr.field_operations.resize import cut_field
+from dmsr.swift_processing import get_displacement_field, get_positions
+from dmsr.field_operations.resize import cut_field, stitch_fields
 
 # Check if CUDA is available and set the device
 gpu_id = 0
@@ -80,7 +80,7 @@ new_soft = old_soft / scale_factor
 new_soft = np.tile(new_soft, scale_factor**3)
 
 del dm_data['Softenings']
-dm_data.create_dataset('Softenings', data=new_mass)
+dm_data.create_dataset('Softenings', data=new_soft)
 
 # TODO: some code in swift_processing could probably be reused here with some 
 # refactoring.
@@ -90,6 +90,7 @@ box_size  = sr_file['Header'].attrs['BoxSize'][0]
 ids       = np.asarray(dm_data['ParticleIDs'])
 positions = np.asarray(dm_data['Coordinates'])
 positions = positions.transpose()
+
 displacements = get_displacement_field(positions, ids, box_size, grid_size)
 
 # TODO: move the padding attribute from the dmr gan to the generator.
@@ -101,3 +102,36 @@ cut_size = 16
 stride = 16
 pad = 2
 field_patches = cut_field(displacements[None, ...], cut_size, stride, pad)
+
+
+#%%
+z = generator.sample_latent_space(1, device)
+
+sr_patches = []
+crop = 2  # TODO: this parameter should probably be a generator attribute
+
+for patch in field_patches:
+    patch = torch.from_numpy(patch).to(torch.float)
+    sr_patch = generator(patch[None, ...], z)
+    sr_patch = sr_patch[:, :, crop:-crop, crop:-crop, crop:-crop].detach()
+    sr_patches.append(sr_patch.numpy())
+    
+
+#%%
+sr_grid_size = scale_factor * grid_size
+displacement_field = stitch_fields(sr_patches, 4)
+sr_positions = get_positions(displacement_field, box_size, sr_grid_size)
+sr_positions = sr_positions.transpose()
+sr_ids = np.arange(sr_grid_size**3)
+
+
+#%%
+del dm_data['Coordinates']
+dm_data.create_dataset('Coordinates', data=sr_positions)
+
+del dm_data['ParticleIDs']
+dm_data.create_dataset('ParticleIDs', data=sr_ids)
+
+sr_file['ICs_parameters'].attrs['Grid Resolution'] = sr_grid_size
+
+sr_file.close()
