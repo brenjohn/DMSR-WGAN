@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 #%%
 data_dir = './swift_snapshots/'
-snapshot = data_dir + '128/snap_0002.hdf5'
+snapshot = data_dir + '064/snap_0002_sr.hdf5'
 
 file = h5.File(snapshot, 'r')
 
@@ -31,3 +31,5 @@ ys = positions[:, 1]
 
 #%%
 plt.scatter(xs, ys, alpha=0.05, s=0.01)
+plt.show()
+plt.close()

@@ -4,6 +4,9 @@
 Created on Fri Sep 13 19:04:03 2024
 
 @author: brennan
+
+This file defines functions for randomly augmenting data with spatial rotations
+and permutations.
 """
 
 import torch

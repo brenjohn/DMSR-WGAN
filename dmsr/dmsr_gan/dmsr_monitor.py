@@ -4,6 +4,11 @@
 Created on Sun Sep 15 12:31:22 2024
 
 @author: brennan
+
+This file defines the a collection of Monitor classes which can be used to
+track various quantities or perform various tasks at different stages during
+training of a DMSR-WGAN. A Monitor Manager class is also defined and is used
+to handle monitor objects during training.
 """
 
 import os
@@ -20,8 +25,9 @@ from ..analysis import displacement_power_spectrum
 #=============================================================================#
 
 class MonitorManager():
-    """
-    The Monitor Manager class stores and calls Monitor objects during DMSR WGAN
+    """A class to manage monitor objects.
+    
+    The Monitor Manager class stores and calls Monitor objects during DMSR-WGAN
     training at appropriate times.
     
     Monitor objects are stored in a monitors dictionary. During DMSR training,
