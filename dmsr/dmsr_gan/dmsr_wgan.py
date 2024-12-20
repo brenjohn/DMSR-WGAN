@@ -4,6 +4,8 @@
 Created on Wed Sep 25 10:34:12 2024
 
 @author: brennan
+
+This file define the DMSR-WGAN class.
 """
 
 import os
@@ -17,7 +19,10 @@ from dmsr.field_operations.conversion import cic_density_field
 
 
 class DMSRWGAN:
-    """
+    """The DMSR-WGAN model.
+    
+    The name abreviates the Dark Matter, Super Resolution, Wasserstein 
+    Generative Adversarial Neural Networks.
     """
     
     def __init__(self, generator, critic, device):
@@ -53,7 +58,7 @@ class DMSRWGAN:
         
     
     def train(self, num_epochs, train_step=None):
-        """Train the DMSRWGAN for the given number of epochs.
+        """Train the DMSR-WGAN for the given number of epochs.
         """
         if not train_step:
             train_step = self.train_step
@@ -253,7 +258,8 @@ class DMSRWGAN:
     #=========================================================================#
 
     def save(self, model_dir='./data/model/'):
-        """
+        """Save the model
+        
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
@@ -275,7 +281,8 @@ class DMSRWGAN:
         
         
     def load(self, checkpoint_dir):
-        # Load the saved critic and generator models.
+        """Load a saved model
+        """
         self.critic = load(checkpoint_dir + 'critic.pth')
         self.generator = load(checkpoint_dir + 'generator.pth')
         

@@ -4,6 +4,9 @@
 Created on Thu Oct 10 11:29:19 2024
 
 @author: brennan
+
+This file defines functions functions for analysing some tensors representing
+physical quantities.
 """
 
 import torch
@@ -61,7 +64,6 @@ def power_spectrum(density, box_size, grid_size):
         uncertainty[i] = power_spectrum[i] / torch.sqrt(torch.sum(shell_mask))
     
     return k_bin_centers, power_spectrum, uncertainty
-
 
 
 def displacement_power_spectrum(

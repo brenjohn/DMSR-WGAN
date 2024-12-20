@@ -22,13 +22,14 @@ from dmsr.field_operations.resize import cut_field, stitch_fields
 
 # Check if CUDA is available and set the device
 gpu_id = 0
-device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+# device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+device = "cpu"
 print(f"Using device: {device}")
 
 
 #%% Load the generator model
 dmsr_model_dir = './dmsr_model/'
-generator = torch.load(dmsr_model_dir + 'generator.pth')
+generator = torch.load(dmsr_model_dir + 'generator.pth').to(device)
 
 input_grid_size = generator.grid_size
 scale_factor = generator.scale_factor
@@ -39,7 +40,8 @@ data_dir = './swift_snapshots/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 sr_snapshot = lr_snapshot.replace('.hdf5', '_sr.hdf5')
 
-os.remove(sr_snapshot)
+if os.path.exists(sr_snapshot):
+    os.remove(sr_snapshot)
 shutil.copy(lr_snapshot, sr_snapshot)
   
 # with h5.File(sr_snapshot, 'a') as sr_file:
@@ -113,7 +115,8 @@ crop = 2  # TODO: this parameter should probably be a generator attribute
 for patch in field_patches:
     patch = torch.from_numpy(patch).to(torch.float)
     sr_patch = generator(patch[None, ...], z)
-    sr_patch = sr_patch[:, :, crop:-crop, crop:-crop, crop:-crop].detach()
+    # sr_patch = sr_patch[:, :, crop:-crop, crop:-crop, crop:-crop].detach()
+    sr_patch = sr_patch.detach()
     sr_patches.append(sr_patch.numpy())
     
 
