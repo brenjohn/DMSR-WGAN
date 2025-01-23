@@ -87,6 +87,24 @@ class DMSRGenerator(nn.Module):
         
         self.output_size = N - 2 * self.crop_size
         self.noise_shapes = noise_shapes
+        
+        
+    def compute_input_padding(self):
+        """Computes the sizes of the input inner region and padding.
+        
+        The low resolution input to the generator is thought of as being made
+        up of two regions: an inner region to be upscaled and an outer region 
+        of padding. The output of the generator is thought of as an upscaled
+        version of the inner region. This method computes the sizes of these 
+        regions.
+        """
+        if self.output_size % self.scale_factor != 0:
+            print('WARNING: inner region of generator input not an integer')
+        self.inner_region = self.output_size // self.scale_factor
+        
+        if (self.grid_size - self.inner_region) % 2 != 0:
+            print('WARNING: padding of generator input not an integer')
+        self.padding = (self.grid_size - self.inner_region) // 2
 
 
     def forward(self, x, z):

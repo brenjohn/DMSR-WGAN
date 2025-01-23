@@ -12,7 +12,7 @@ import torch
 import h5py as h5
 import numpy as np
 
-from .postions import get_displacement_field
+from .positions import get_displacement_field
 
 # TODO: in the interest of reusability, this should read a single snapshot.
 def read_snapshot(snapshots):

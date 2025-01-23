@@ -40,10 +40,10 @@ def cut_field(fields, cut_size, stride=0, pad=0):
         field and n is the grid size of each subfield (ie cut_size + 2 * pad).
     """
     grid_size = fields.shape[-1]
-    cuts = []
     if not stride:
         stride = cut_size
     
+    cuts = []
     for i in range(0, grid_size, stride):
         for j in range(0, grid_size, stride):
             for k in range(0, grid_size, stride):
