@@ -4,6 +4,8 @@
 Created on Fri Sep 13 12:19:20 2024
 
 @author: brennan
+
+This file defines the critic model used by the DMSR-WGAN model.
 """
 
 import torch
@@ -14,7 +16,7 @@ from ..field_operations.resize import crop
 
 
 class DMSRCritic(nn.Module):
-    """The DMSR critic model for the DMSR WGAN.
+    """The critic model for the DMSR-WGAN.
     """
     
     def __init__(
@@ -35,10 +37,11 @@ class DMSRCritic(nn.Module):
         
         
     def layer_channels_and_sizes(self):
-        """Compute the input and output channels, along with the output sizes 
-        of the residual blocks to be used in the critic model.
+        """Compute the input and output channels of each layer.
         
-        Returns two lists for the denisty and main branches of the model
+        The output sizes of residual blocks are also computed.
+        
+        Returns two lists for the main and denisty branches of the model
         containing (channel_in, channel_out, out_size) tuples for each residual
         block in each branch.
         """
@@ -82,7 +85,7 @@ class DMSRCritic(nn.Module):
         
         
     def build_critic_components(self):
-        """Create the neural network components of the dmsr critic model.
+        """Creates the neural network components of the critic model.
         
         The model consists of of two branchs; a density branch that downscales
         the given density data to the same resolution as the displacement data,
@@ -95,12 +98,13 @@ class DMSRCritic(nn.Module):
                    |
              Density Block
                    |
+            Residual Block
                    |
                    |    (SR_data, LR_data)           <--- Displacement Input
                    |             |
-                   |       Initial Block
-                   |             |
                    |---------> concat
+                                 |
+                           Initial Block
                                  |
                           Residual Block
                                  |
@@ -163,24 +167,26 @@ class DMSRCritic(nn.Module):
     
 
 class ResidualBlock(nn.Module):
-    """Residual convolution blocks have the following structure:
+    """The Residual block used in the critic model.
     
-                 x
+    Residual convolution blocks have the following structure:
+    
+              (input)
+                 |
                  |-------------------->|
                  |                     |
           Convolution (3x3x3)  Convolution (1x1x1)
                  |                     |
-          Convolution (3x3x3)          |
+          Convolution (3x3x3)       Crop 2
                  |                     |
                  + <-------------------|
                  |
-             Downsample
+          Linear Downsample
                  |
-                 x
+             (output)
     
-    Note, The output tensor has size given by:
-        next_size = (prev_size - 4) / 2
-    where odd sizes are rounded down by the downsampling method.
+    Note, The output tensor has size `next_size = (prev_size - 4) / 2`, where 
+    odd sizes are rounded down by the downsampling method.
     """
     
     def __init__(self, channels_curr, channels_next):

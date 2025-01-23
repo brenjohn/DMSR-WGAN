@@ -4,12 +4,15 @@
 Created on Fri Sep 13 20:41:51 2024
 
 @author: brennan
+
+This file defines functions for resizing tensors using various methods.
 """
 
 import numpy as np
 
+
 def crop(field, crop_size):
-    """Crops the given tensor by size crop_size.
+    """Crops the spatial dimensions of the given tensor by size crop_size.
     
     The tensor `field` should have shape (batch_size, channels, Nx, Ny, Nz).
     """
@@ -37,10 +40,10 @@ def cut_field(fields, cut_size, stride=0, pad=0):
         field and n is the grid size of each subfield (ie cut_size + 2 * pad).
     """
     grid_size = fields.shape[-1]
-    cuts = []
     if not stride:
         stride = cut_size
     
+    cuts = []
     for i in range(0, grid_size, stride):
         for j in range(0, grid_size, stride):
             for k in range(0, grid_size, stride):
@@ -56,3 +59,26 @@ def cut_field(fields, cut_size, stride=0, pad=0):
                 cuts.append(patch)
     
     return np.concatenate(cuts)
+
+
+def stitch_fields(patches, patches_per_dim):
+    """Combines or stitches the given collection of patches into a single
+    tensor.
+    
+    This function can be thought of as performing the reverse operation
+    performed by `cut_field`.
+    """
+    
+    patch_size = patches[0].shape[-1]
+    field_size = patch_size * patches_per_dim
+    field = np.zeros((3, field_size, field_size, field_size))
+    
+    for n, patch in enumerate(patches):
+        i = n // patches_per_dim**2
+        j = (n % patches_per_dim**2) // patches_per_dim
+        k = n % patches_per_dim
+        
+        N = patch_size
+        field[:, i*N:(i+1)*N, j*N:(j+1)*N, k*N:(k+1)*N] = patch
+        
+    return field

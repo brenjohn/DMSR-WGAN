@@ -108,3 +108,8 @@ ti = time.time()
 gan.train_step(lr_data, hr_data)
 time_train_step = time.time() - ti
 print('train step took :', time_train_step)
+
+
+#%%
+gan_dir = './gan_model/'
+gan.save(gan_dir)

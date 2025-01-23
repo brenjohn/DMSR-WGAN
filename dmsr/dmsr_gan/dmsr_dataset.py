@@ -4,6 +4,9 @@
 Created on Fri Sep 13 13:45:00 2024
 
 @author: brennan
+
+This file define a DMSR-Dataset class for handling training data for a 
+DMSR-WGAN model.
 """
 
 from torch.utils.data import Dataset
@@ -11,6 +14,8 @@ from ..field_operations.augmentation import random_transformation
 
 
 class DMSRDataset(Dataset):
+    """A Dataset class for holding training data for the DMSR-WGAN.
+    """
     
     def __init__(self, lr_data, hr_data, augment=True):
         self.lr_data = lr_data

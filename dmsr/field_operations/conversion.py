@@ -4,6 +4,9 @@
 Created on Sat Sep 14 15:01:39 2024
 
 @author: brennan
+
+This file defines functions for converting tensors with data for one quantity
+into tensors with data for related/derived quantities. 
 """
 
 import torch
@@ -12,6 +15,8 @@ from torch import arange
 
 
 def displacements_to_positions(displacements, box_length):
+    """Converts the given displacments into absolute positions.
+    """
     device = displacements.device
     grid_size = displacements.shape[-1]
     cell_size = box_length / grid_size
@@ -27,6 +32,12 @@ def displacements_to_positions(displacements, box_length):
 
 
 def cic_density_field(displacements, box_size, grid_size=None):
+    """Returns a density field tensor derived from the given particle
+    displacements.
+    
+    Note, periodic boundary conditions are not implemented and particles 
+    outside the box are ignored.
+    """
     displacements = displacements - displacements.mean((2, 3, 4), keepdims=True)
     
     batch_size = displacements.shape[0]

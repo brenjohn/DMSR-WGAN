@@ -4,6 +4,8 @@
 Created on Fri Sep 13 12:18:31 2024
 
 @author: brennan
+
+This file defines the generator model used by the DMSR-WGAN model.
 """
 
 import torch
@@ -15,7 +17,7 @@ from ..field_operations.resize import crop
 
 
 class DMSRGenerator(nn.Module):
-    """The DMSR generator model for the DMSR WGAN.
+    """The generator model for the DMSR-WGAN.
     """
     
     def __init__(self,
@@ -85,6 +87,24 @@ class DMSRGenerator(nn.Module):
         
         self.output_size = N - 2 * self.crop_size
         self.noise_shapes = noise_shapes
+        
+        
+    def compute_input_padding(self):
+        """Computes the sizes of the input inner region and padding.
+        
+        The low resolution input to the generator is thought of as being made
+        up of two regions: an inner region to be upscaled and an outer region 
+        of padding. The output of the generator is thought of as an upscaled
+        version of the inner region. This method computes the sizes of these 
+        regions.
+        """
+        if self.output_size % self.scale_factor != 0:
+            print('WARNING: inner region of generator input not an integer')
+        self.inner_region = self.output_size // self.scale_factor
+        
+        if (self.grid_size - self.inner_region) % 2 != 0:
+            print('WARNING: padding of generator input not an integer')
+        self.padding = (self.grid_size - self.inner_region) // 2
 
 
     def forward(self, x, z):
@@ -100,7 +120,7 @@ class DMSRGenerator(nn.Module):
     
     
     def sample_latent_space(self, batch_size, device):
-        """Returns a sample from the latent space.
+        """Returns a sample from the generator's latent space.
         """
         latent_variable = [None] * len(self.noise_shapes)
         for i, (shape_A, shape_B) in enumerate(self.noise_shapes):
@@ -114,31 +134,36 @@ class DMSRGenerator(nn.Module):
 
 
 class HBlock(nn.Module):
-    """
-    The "H" block of the StyleGAN2 generator.
+    """The H-block used in the generator model.
+    
+    The H-block take four inputs, (primary, auxiliary, noise A, noise B), and
+    produces two outputs, (primary output, auxiliary output). The H-block has 
+    the following structure:
 
-        x_p                     y_p
-         |                       |
-    convolution           linear upsample
-         |                       |
-          >--- projection ------>+
-         |                       |
-         v                       v
-        x_n                     y_n
+                    (auxiliary input)               (primary input)
+                           |                               |
+                           |                               |
+    (noise A)-----> concatenate noise               linear upsample
+                           |                               |
+                     linear upsample                     crop
+                           |                               |
+                      convolution                          |
+                           |                               |
+    (noise B)-----> concatenate noise                      |
+                           |                               |
+                      convolution                          |
+                           |                               |
+                           >-------- projection ---------->+
+                           |        convolution            |
+                           |                               |
+                    (auxiliary output)              (primary output)
 
-    See Fig. 7 (b) upper in https://arxiv.org/abs/1912.04958
-    Upsampling are all linear, not transposed convolution.
-
-    Parameters
-    ----------
-    prev_chan : number of channels of x_p
-    next_chan : number of channels of x_n
-    out_chan : number of channels of y_p and y_n
-    cat_noise: concatenate noise if True, otherwise add noise
-
-    Notes
-    -----
-    next_size = 2 * prev_size - 4
+    Note, the spatial size of both outputs is:
+        next_size = 2 * prev_size - 4
+        
+    Parameters:
+        curr_chan : number of channels of auxiliary input
+        next_chan : number of channels of auxiliary output
     """
 
     def __init__(self, curr_chan, next_chan):
