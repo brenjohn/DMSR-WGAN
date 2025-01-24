@@ -4,43 +4,31 @@
 Created on Thu Jan  9 15:56:00 2025
 
 @author: brennan
+
+This script was used to create figure 8 of Brennan et. al. 2025 "On the Use of
+WGANs for Super Resolution in Dark-Matter Simulations".
 """
 
 import sys
 sys.path.append("..")
 sys.path.append("../..")
 
-import h5py as h5
 import numpy as np
 import matplotlib.pyplot as plt
 
 from swift_tools.density import cloud_in_cells
+from swift_tools.data import read_snapshot
 
 
-#%% Calculating Comological Volume Density Field.
-def read_snapshot(snapshot):
-    file = h5.File(snapshot, 'r')
-    
-    h = file['Cosmology'].attrs['h'][0]
-    
-    grid_size = file['ICs_parameters'].attrs['Grid Resolution']
-    box_size = file['Header'].attrs['BoxSize'][0]
-    
-    dm_data = file['DMParticles']
-    positions = np.asarray(dm_data['Coordinates'])
-    
-    file.close()
-    return positions, grid_size, box_size, h
-
-
+#%% Calculating Density Field.
 data_dir = './swift_snapshots/'
 l0_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 l1_snapshot = data_dir + '064/snap_0002_sr_level_1.hdf5'
 l2_snapshot = data_dir + '064/snap_0002_sr_level_2.hdf5'
 
-l0_positions, l0_grid_size, l0_box_size, h = read_snapshot(l0_snapshot)
-l1_positions, l1_grid_size, l1_box_size, h = read_snapshot(l1_snapshot)
-l2_positions, l2_grid_size, l2_box_size, h = read_snapshot(l2_snapshot)
+l0_positions, l0_grid_size, l0_box_size, h, _ = read_snapshot(l0_snapshot)
+l1_positions, l1_grid_size, l1_box_size, h, _ = read_snapshot(l1_snapshot)
+l2_positions, l2_grid_size, l2_box_size, h, _ = read_snapshot(l2_snapshot)
 
 l0_density = cloud_in_cells(l0_positions, l0_grid_size, l0_box_size)
 l1_density = cloud_in_cells(l1_positions, l1_grid_size, l1_box_size)
@@ -67,46 +55,43 @@ fig, axes = plt.subplots(1, 3, figsize=(21, 7))
 
 cmap = 'inferno'
 
-im1 = axes[0].imshow(l0_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
+axes[0].imshow(l0_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[0].set_xticks([])
 axes[0].set_yticks([])
 axes[0].text(
-    x=0.5,  # x-coordinate
-    y=2,  # y-coordinate (adjust based on your data range)
-    s='0 layers',  # Text label
+    x=0.5,
+    y=2,
+    s='0 layers',
     color='white',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
-im2 = axes[1].imshow(l1_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
+axes[1].imshow(l1_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[1].set_xticks([])
 axes[1].set_yticks([])
 axes[1].text(
-    x=0.5,  # x-coordinate
-    y=2,  # y-coordinate (adjust based on your data range)
-    s='1 layers',  # Text label
+    x=0.5,
+    y=2,
+    s='1 layers',
     color='white',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
-im3 = axes[2].imshow(l2_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
+axes[2].imshow(l2_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[2].set_xticks([])
 axes[2].set_yticks([])
 axes[2].text(
-    x=0.5,  # x-coordinate
-    y=2,  # y-coordinate (adjust based on your data range)
-    s='2 layers',  # Text label
+    x=0.5,
+    y=2,
+    s='2 layers',
     color='white',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
 plt.tight_layout()
@@ -143,14 +128,13 @@ axes[0].set_ylim(lower, upper)
 axes[0].set_xticks([])
 axes[0].set_yticks([])
 axes[0].text(
-    x=1,  # x-coordinate
-    y=33,  # y-coordinate (adjust based on your data range)
-    s='0 layers',  # Text label
+    x=1,
+    y=33,
+    s='0 layers',
     color='black',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
 axes[1].scatter(l1_xs, l1_ys, s=0.2, alpha=0.5)
@@ -159,14 +143,13 @@ axes[1].set_ylim(lower, upper)
 axes[1].set_xticks([])
 axes[1].set_yticks([])
 axes[1].text(
-    x=1,  # x-coordinate
-    y=33,  # y-coordinate (adjust based on your data range)
-    s='1 layers',  # Text label
+    x=1,
+    y=33,
+    s='1 layers',
     color='black',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
 axes[2].scatter(l2_xs, l2_ys, s=0.2, alpha=0.5)
@@ -175,14 +158,13 @@ axes[2].set_ylim(lower, upper)
 axes[2].set_xticks([])
 axes[2].set_yticks([])
 axes[2].text(
-    x=1,  # x-coordinate
-    y=33,  # y-coordinate (adjust based on your data range)
-    s='2 layers',  # Text label
+    x=1,
+    y=33,
+    s='2 layers',
     color='black',
-    fontsize=35,  # Font size
-    # fontweight='bold',
-    verticalalignment='top',  # Align the top of the text box
-    horizontalalignment='left'  # Align the left of the text box
+    fontsize=35,
+    verticalalignment='top',
+    horizontalalignment='left'
 )
 
 plt.tight_layout()

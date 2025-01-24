@@ -13,7 +13,7 @@ sys.path.append("../..")
 import glob
 import numpy as np
 
-from dmsr.swift_processing import read_snapshot
+from dmsr.swift_processing import read_snapshots
 from dmsr.field_operations.resize import cut_field
 
 
@@ -28,8 +28,8 @@ HR_snapshots = np.sort(glob.glob(data_directory + '*/256/snap_0002.hdf5'))[:16]
 
 
 #%%
-LR_fields, box_size, LR_grid_size, LR_mass = read_snapshot(LR_snapshots)
-HR_fields, box_size, HR_grid_size, HR_mass = read_snapshot(HR_snapshots)
+LR_fields, box_size, LR_grid_size, LR_mass = read_snapshots(LR_snapshots)
+HR_fields, box_size, HR_grid_size, HR_mass = read_snapshots(HR_snapshots)
 
 # # Normalise values so that box size is 1
 # LR_fields /= box_size
