@@ -21,10 +21,10 @@ The **DMSR-WGAN** uses adversarial training to super-resolve dark matter simulat
 - Reduced computational cost compared to high-resolution simulations.
 
 For more details, refer to: 
-[On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/arXivID](https://arxiv.org/abs/2501.13056 ).
+[On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/2501.13056 ).
 
 ---
 
 ## Results
-For scripts and steps to reproduce results from [On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/arXivID](https://arxiv.org/abs/2501.13056 ), 
+For scripts and steps to reproduce results from [On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/2501.13056 ), 
 please switch to the `on-wgan-super-resolution` branch.
