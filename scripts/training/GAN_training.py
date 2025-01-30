@@ -16,7 +16,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from dmsr.dmsr_gan import DMSRWGAN
-from dmsr.dmsr_gan import DMSRDensityCritic
+from dmsr.dmsr_gan import DMSRCritic
 from dmsr.dmsr_gan import DMSRGenerator
 from dmsr.dmsr_gan import DMSRDataset
 
@@ -32,23 +32,23 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-lr_grid_size       = 20
-generator_channels = 64 
-crop_size          = 2
-scale_factor       = 2
+lr_grid_size   = 20
+input_channels = 3
+base_channels  = 64 
+crop_size      = 2
+scale_factor   = 2
 
 generator = DMSRGenerator(
-    lr_grid_size, generator_channels, crop_size, scale_factor
+    lr_grid_size, input_channels, base_channels, crop_size, scale_factor
 )
 
 hr_grid_size      = generator.output_size
-density_size      = hr_grid_size
-displacement_size = hr_grid_size
-density_channels  = 16
-main_channels     = 64
+critic_input_size = hr_grid_size
+input_channels    = 8
+base_channels     = 64
 
-critic = DMSRDensityCritic(
-    density_size, displacement_size, density_channels, main_channels
+critic = DMSRCritic(
+    critic_input_size, input_channels, base_channels
 )
 
 generator.to(device)

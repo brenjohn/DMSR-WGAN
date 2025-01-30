@@ -45,9 +45,10 @@ class HBlock(nn.Module):
     Parameters:
         curr_chan : number of channels of auxiliary input
         next_chan : number of channels of auxiliary output
+        prim_chan : number of channels of primary input
     """
 
-    def __init__(self, curr_chan, next_chan):
+    def __init__(self, curr_chan, next_chan, prim_chan):
         super().__init__()
 
         self.conv_A = nn.Sequential(
@@ -62,7 +63,7 @@ class HBlock(nn.Module):
 
         # Projection to xyz channels
         self.proj = nn.Sequential(
-            nn.Conv3d(next_chan, 3, 1),
+            nn.Conv3d(next_chan, prim_chan, 1),
             nn.PReLU()
         )
 

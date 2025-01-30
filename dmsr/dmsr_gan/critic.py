@@ -25,12 +25,14 @@ class DMSRCritic(nn.Module):
     def __init__(
             self,
             input_size,
-            channels,
+            input_channels,
+            base_channels,
             **kwargs
         ):
         super().__init__()
         self.input_size = input_size
-        self.channels = channels
+        self.input_channels = input_channels
+        self.base_channels = base_channels
         self.build_critic_components()
         
         
@@ -45,7 +47,7 @@ class DMSRCritic(nn.Module):
         """
         # Main residual blocks
         size = self.input_size
-        channels_curr = self.channels
+        channels_curr = self.base_channels
         channels_next = channels_curr * 2
         
         blocks = []
@@ -84,7 +86,7 @@ class DMSRCritic(nn.Module):
         residual_layers = self.layer_channels_and_sizes()
         
         self.initial_block = nn.Sequential(
-            nn.Conv3d(8, self.channels, 1),
+            nn.Conv3d(self.input_channels, self.base_channels, 1),
             nn.PReLU(),
         )
 
@@ -113,9 +115,14 @@ class DMSRCritic(nn.Module):
     
     def prepare_batch(self, hr_batch, lr_batch, box_size):
         """Prepare input data for the critic.
+        
+        Displacement coordinates are assumed to be contained in the first three
+        channels of the given high- and low-resolution data.
         """
-        lr_density = cic_density_field(lr_batch, box_size, self.input_size)
-        hr_density = cic_density_field(hr_batch, box_size, self.input_size)
+        lr_particles = lr_batch[:, :3, :, :, :]
+        hr_particles = hr_batch[:, :3, :, :, :]
+        lr_density = cic_density_field(lr_particles, box_size, self.input_size)
+        hr_density = cic_density_field(hr_particles, box_size, self.input_size)
         return concat((hr_density, lr_density, hr_batch, lr_batch), dim=1),
     
     

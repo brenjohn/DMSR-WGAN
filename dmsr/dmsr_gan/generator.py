@@ -8,11 +8,9 @@ Created on Fri Sep 13 12:18:31 2024
 This file defines the generator model used by the DMSR-WGAN model.
 """
 
-import torch
 import torch.nn as nn
 
 from torch import randn
-from torch.nn.functional import interpolate
 from ..field_operations.resize import crop
 from .blocks import HBlock
 
@@ -23,16 +21,18 @@ class DMSRGenerator(nn.Module):
     
     def __init__(self,
                  grid_size,
-                 channels,
+                 input_channels,
+                 base_channels,
                  crop_size=0,
                  scale_factor=8,
                  **kwargs
         ):
         super().__init__()
-        self.grid_size    = grid_size
-        self.channels     = channels
-        self.scale_factor = scale_factor
-        self.crop_size    = crop_size
+        self.grid_size      = grid_size
+        self.input_channels = input_channels
+        self.base_channels  = base_channels
+        self.scale_factor   = scale_factor
+        self.crop_size      = crop_size
         
         self.build_generator_components()
 
@@ -64,20 +64,21 @@ class DMSRGenerator(nn.Module):
                                   (output)
         """
         self.initial_block = nn.Sequential(
-            nn.Conv3d(3, self.channels, 1),
+            nn.Conv3d(self.input_channels, self.base_channels, 1),
             nn.PReLU(),
         )
         
         scale = 1
-        curr_chan = self.channels
+        curr_chan = self.base_channels
         next_chan = curr_chan // 2
+        prim_chan = self.input_channels
         N = self.grid_size
         noise_shapes = []
         
         self.blocks = nn.ModuleList()
         while scale < self.scale_factor:
             self.blocks.append(
-                HBlock(curr_chan, next_chan)
+                HBlock(curr_chan, next_chan, prim_chan)
             )
             
             scale *= 2
