@@ -16,11 +16,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from dmsr.dmsr_gan.dmsr_wgan import DMSRWGAN
-from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
+from dmsr.dmsr_gan.dmsr_density_branch_critic import DMSRDensityCritic
 from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
-
 from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
-from dmsr.swift_processing import load_numpy_dataset
+
+from swift_tools.data import load_numpy_dataset
 
 
 # Check if CUDA is available and set the device
@@ -47,7 +47,7 @@ displacement_size = hr_grid_size
 density_channels  = 16
 main_channels     = 64
 
-critic = DMSRCritic(
+critic = DMSRDensityCritic(
     density_size, displacement_size, density_channels, main_channels
 )
 
@@ -71,7 +71,7 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_training/'
+data_directory = '../../data/dmsr_trainingx8/'
 batch_size = 4
 
 data = load_numpy_dataset(data_directory)
@@ -171,17 +171,27 @@ gan.set_monitor(monitor_manager)
 #=============================================================================#
 #                         Supervised Training
 #=============================================================================#
-# from dmsr.dmsr_gan.dmsr_monitor import SupervisedValidator
+# from dmsr.dmsr_gan.dmsr_monitor import SupervisedMonitor
 
-# supervised_epochs = 5
-# validator = SupervisedValidator(generator, valid_dataloader, device)
-
-# gan.train(
-#     supervised_epochs, 
-#     train_step = gan.generator_supervised_step, 
-#     validator = validator
+# valid_dataset = DMSRDataset(
+#     LR_data.float(), HR_data.float(), augment=True
 # )
-# gan.train(5, train_step=gan.critic_supervised_step)
+
+# valid_dataloader = DataLoader(
+#     valid_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+# )
+
+# validator = SupervisedMonitor(generator, valid_dataloader, device)
+
+supervised_epochs = 5
+gan.train(
+    supervised_epochs, 
+    train_step = gan.generator_supervised_step
+)
+gan.train(
+    supervised_epochs, 
+    train_step = gan.critic_supervised_step
+)
 
 
 #=============================================================================#

@@ -10,12 +10,11 @@ This file define the DMSR-WGAN class.
 
 import os
 
-from torch import concat, rand, autograd, save, load
+from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
 
-from dmsr.field_operations.resize import crop
-from dmsr.field_operations.conversion import cic_density_field
+from ..field_operations.resize import crop
 
 
 class DMSRWGAN:
@@ -111,9 +110,7 @@ class DMSRWGAN:
         us_batch = crop(lr_batch, self.lr_padding)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
-        )
-        us_density = cic_density_field(us_batch, self.box_size)
-        us_batch = concat((us_density, us_batch), dim=1).detach()
+        ).detach()
         
         # Compute the loss and update the generator parameters.
         losses = self.critic_train_step(lr_batch, hr_batch, us_batch)
@@ -132,13 +129,10 @@ class DMSRWGAN:
         hr_batch = hr_batch.to(self.device)
         
         # Prepare upscaled data
-        density_size = self.critic.density_size
         us_batch = crop(lr_batch, self.lr_padding)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
-        )
-        us_density = cic_density_field(us_batch, self.box_size, density_size)
-        us_batch = (us_batch.detach(), us_density.detach())
+        ).detach()
         
         # TODO: Maybe add random augmentation to data before generator step.
         # Train the critic and generator models.
@@ -151,22 +145,20 @@ class DMSRWGAN:
         """Train step for the critic.
         """
         self.optimizer_c.zero_grad()
-        us_batch, us_density = us_batch
-        density_size = self.critic.density_size
         
         # Create fake data using the generator.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
         sr_batch = self.generator(lr_batch, z)
-        sr_density = cic_density_field(sr_batch, self.box_size, density_size)
-        fake_batch = concat((sr_batch, us_batch), dim=1).detach()
-        fake_density = concat((sr_density, us_density), dim=1).detach()
-        fake_data = (fake_batch, fake_density)
+        fake_data = self.critic.prepare_batch(
+            sr_batch, us_batch, self.box_size
+        )
+        fake_data = tuple(tensor.detach() for tensor in fake_data)
         
         # Prepare real data.
-        hr_density = cic_density_field(hr_batch, self.box_size, density_size)
-        real_batch = concat((hr_batch, us_batch), dim=1).detach()
-        real_density = concat((hr_density, us_density), dim=1).detach()
-        real_data = (real_batch, real_density)
+        real_data = self.critic.prepare_batch(
+            hr_batch, us_batch, self.box_size
+        )
+        real_data = tuple(tensor.detach() for tensor in real_data)
         
         # Use the critic to score the real and fake data and compute the loss.
         real_scores = self.critic(*real_data)
@@ -176,7 +168,9 @@ class DMSRWGAN:
         
         # Add the gradient penalty term to the loss.
         if self.batch_counter % 16 == 0:
-            gradient_penalty = self.gradient_penalty(real_data, fake_data)
+            gradient_penalty = self.critic.gradient_penalty(
+                self.batch_size, *real_data, *fake_data, self.device
+            )
             losses['gradient_penalty'] = gradient_penalty.item()
         else:
             gradient_penalty = 0
@@ -190,56 +184,17 @@ class DMSRWGAN:
         return losses
     
     
-    def gradient_penalty(self, real_data, fake_data, weight=10):
-        """Calculate the gradient penalty for WGAN critic.
-        """
-        # Create data by interploating real and fake data and random amount.
-        alpha = rand(self.batch_size, device=self.device)
-        alpha = alpha.reshape(self.batch_size, *(1, 1, 1, 1))
-        real_displacements, real_density = real_data
-        fake_displacements, fake_density = fake_data
-        displacements  = real_displacements * alpha
-        displacements += fake_displacements * (1 - alpha)
-        density  = real_density * alpha
-        density += fake_density * (1 - alpha)
-        
-        # Score the new data with the critic model and get its derivative.
-        score = self.critic(
-            displacements.requires_grad_(True), density.requires_grad_(True)
-        )
-        score = score.sum()
-        displacement_grad, density_grad = autograd.grad(
-            score,
-            (displacements, density),
-            retain_graph=True,
-            create_graph=True,
-            only_inputs=True,
-        )
-        
-        # Compute the gradient penalty term.
-        density_grad = density_grad.flatten(start_dim=1)
-        displacement_grad = displacement_grad.flatten(start_dim=1)
-        grad = concat((displacement_grad, density_grad), dim=1)
-        penalty = (weight * ((grad.norm(p=2, dim=1) - 1) ** 2).mean()
-            + 0 * score  # hack to trigger DDP allreduce hooks
-        )
-        return penalty
-    
-    
     def generator_train_step(self, lr_batch, us_batch):
         """Train step for the generator.
         """
         self.optimizer_g.zero_grad()
-        us_batch, us_density = us_batch
-        density_size = self.critic.density_size
         
         # Use the generator to create fake data.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
         sr_batch = self.generator(lr_batch, z)
-        sr_density = cic_density_field(sr_batch, self.box_size, density_size)
-        fake_batch = concat((sr_batch, us_batch), dim=1)
-        fake_density = concat((sr_density, us_density), dim=1)
-        fake_data = (fake_batch, fake_density)
+        fake_data = self.critic.prepare_batch(
+            sr_batch, us_batch, self.box_size
+        )
         
         # Use the critic to score the generated data.
         fake_scores = self.critic(*fake_data)
