@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from torch import concat, rand, autograd
 from ..field_operations.conversion import cic_density_field
-from .dmsr_blocks import ResidualBlock
+from .blocks import ResidualBlock
 
 
 class DMSRCritic(nn.Module):

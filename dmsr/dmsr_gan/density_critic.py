@@ -4,15 +4,17 @@
 Created on Tue Jan 28 15:46:51 2025
 
 @author: brennan
+
+This file defines a generalised critic model for the the DMSR-WGAN with an
+additional branch for processing density field data.
 """
 
 import torch
 import torch.nn as nn
 
 from torch import concat, rand, autograd
-from torch.nn.functional import interpolate
-from ..field_operations.resize import crop
 from ..field_operations.conversion import cic_density_field
+from .blocks import ResidualBlock
 
 
 class DMSRDensityCritic(nn.Module):
@@ -215,50 +217,3 @@ class DMSRDensityCritic(nn.Module):
             + 0 * score  # hack to trigger DDP allreduce hooks
         )
         return penalty
-    
-    
-
-class ResidualBlock(nn.Module):
-    """The Residual block used in the critic model.
-    
-    Residual convolution blocks have the following structure:
-    
-              (input)
-                 |
-                 |-------------------->|
-                 |                     |
-          Convolution (3x3x3)  Convolution (1x1x1)
-                 |                     |
-          Convolution (3x3x3)       Crop 2
-                 |                     |
-                 + <-------------------|
-                 |
-          Linear Downsample
-                 |
-             (output)
-    
-    Note, The output tensor has size `next_size = (prev_size - 4) / 2`, where 
-    odd sizes are rounded down by the downsampling method.
-    """
-    
-    def __init__(self, channels_curr, channels_next):
-        super().__init__()
-        self.skip = nn.Conv3d(channels_curr, channels_next, 1)
-        self.convs = nn.Sequential(
-            nn.Conv3d(channels_curr, channels_curr, 3),
-            nn.PReLU(),
-            nn.Conv3d(channels_curr, channels_next, 3),
-            nn.PReLU(),
-        )
-            
-
-    def forward(self, x):
-        # Skip connection
-        y = x
-        y = self.skip(y)
-        y = crop(y, 2)
-        
-        x = self.convs(x)
-        x = x + y
-        x = interpolate(x, scale_factor=0.5, mode='trilinear')
-        return x

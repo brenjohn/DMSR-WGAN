@@ -15,10 +15,10 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dmsr.dmsr_gan.dmsr_wgan import DMSRWGAN
-from dmsr.dmsr_gan.dmsr_density_branch_critic import DMSRDensityCritic
-from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
-from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
+from dmsr.dmsr_gan import DMSRWGAN
+from dmsr.dmsr_gan import DMSRDensityCritic
+from dmsr.dmsr_gan import DMSRGenerator
+from dmsr.dmsr_gan import DMSRDataset
 
 from swift_tools.data import load_numpy_dataset
 
@@ -112,9 +112,9 @@ gan.set_optimizer(optimizer_c, optimizer_g)
 #=============================================================================#
 #                               Monitor
 #=============================================================================#
-from dmsr.dmsr_gan.dmsr_monitor import MonitorManager, LossMonitor
-from dmsr.dmsr_gan.dmsr_monitor import SamplesMonitor, CheckpointMonitor
-from dmsr.dmsr_gan.dmsr_monitor import UpscaleMonitor
+from dmsr.dmsr_gan import MonitorManager, LossMonitor
+from dmsr.dmsr_gan import SamplesMonitor, CheckpointMonitor
+from dmsr.dmsr_gan import UpscaleMonitor
 
 lr_sample = LR_data[2:3, ...].float()
 hr_sample = HR_data[2:3, ...].float()
@@ -171,7 +171,7 @@ gan.set_monitor(monitor_manager)
 #=============================================================================#
 #                         Supervised Training
 #=============================================================================#
-# from dmsr.dmsr_gan.dmsr_monitor import SupervisedMonitor
+# from dmsr.dmsr_gan import SupervisedMonitor
 
 # valid_dataset = DMSRDataset(
 #     LR_data.float(), HR_data.float(), augment=True

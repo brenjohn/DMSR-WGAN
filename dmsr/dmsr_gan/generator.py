@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch import randn
 from torch.nn.functional import interpolate
 from ..field_operations.resize import crop
-from .dmsr_blocks import HBlock
+from .blocks import HBlock
 
 
 class DMSRGenerator(nn.Module):
