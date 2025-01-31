@@ -11,8 +11,9 @@ This file defines the critic model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import concat, rand, autograd
-from ..field_operations.conversion import cic_density_field
 from .blocks import ResidualBlock
+from ..field_operations.conversion import cic_density_field
+from ..field_operations.resize import pixel_unshuffle
 
 
 class DMSRCritic(nn.Module):
@@ -27,6 +28,7 @@ class DMSRCritic(nn.Module):
             input_size,
             input_channels,
             base_channels,
+            density_scale_factor = None,
             **kwargs
         ):
         super().__init__()
@@ -35,6 +37,13 @@ class DMSRCritic(nn.Module):
         self.base_channels = base_channels
         self.build_critic_components()
         
+        if density_scale_factor:
+            self.density_scale = density_scale_factor
+            self.density_size = density_scale_factor * input_size
+            self.prepare_batch = self.prepare_batch_hr
+        else:
+            self.prepare_batch = self.prepare_batch_lr_hr
+    
         
     def layer_channels_and_sizes(self):
         """Compute input and output channels of each layer.
@@ -113,7 +122,7 @@ class DMSRCritic(nn.Module):
         return self.aggregate_block(x).flatten()
     
     
-    def prepare_batch(self, hr_batch, lr_batch, box_size):
+    def prepare_batch_lr_hr(self, hr_batch, lr_batch, box_size):
         """Prepare input data for the critic.
         
         Displacement coordinates are assumed to be contained in the first three
@@ -124,6 +133,19 @@ class DMSRCritic(nn.Module):
         lr_density = cic_density_field(lr_particles, box_size, self.input_size)
         hr_density = cic_density_field(hr_particles, box_size, self.input_size)
         return concat((hr_density, lr_density, hr_batch, lr_batch), dim=1),
+    
+    
+    def prepare_batch_hr(self, hr_batch, lr_batch, box_size):
+        """Prepare input data for the critic.
+        
+        Displacement coordinates are assumed to be contained in the first three
+        channels of the given high- and low-resolution data.
+        """
+        hr_particles = hr_batch[:, :3, :, :, :]
+        scale, density_size = self.density_scale, self.density_size
+        hr_density = cic_density_field(hr_particles, box_size, density_size)
+        hr_density = pixel_unshuffle(hr_density, scale)
+        return concat((hr_density, hr_batch, lr_batch), dim=1),
     
     
     def gradient_penalty(

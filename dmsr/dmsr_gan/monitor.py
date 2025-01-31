@@ -333,7 +333,7 @@ class UpscaleMonitor(BaseMonitor):
         """
         spectra = []
         for sample in displacements:
-            sample = sample[None, ...]
+            sample = sample[None, 0:3, ...]
             spectrum = displacement_power_spectrum(
                 sample, self.mass, self.box_size, self.grid_size
             )
@@ -363,6 +363,7 @@ class UpscaleMonitor(BaseMonitor):
             sr_sample = sr_sample.detach()
             
             # Get the power spectrum of the fake data.
+            sr_sample = sr_sample[:, 0:3, ...]
             sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
                 sr_sample, self.mass, self.box_size, self.grid_size
             )

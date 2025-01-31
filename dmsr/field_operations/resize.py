@@ -82,3 +82,35 @@ def stitch_fields(patches, patches_per_dim):
         field[:, i*N:(i+1)*N, j*N:(j+1)*N, k*N:(k+1)*N] = patch
         
     return field
+
+
+def pixel_unshuffle(tensor, scale):
+    """
+    Reshapes the given a tensor of shape (B, C, D, H, W) to shape 
+    (B, C * scale**3, D // scale, H // scale, W // scale).
+    
+    The reshaping procedure uses the pixel shuffle method of Shi et al 2016 -
+    "Real-Time Single Image and Video Super-Resolution Using an Efficient 
+    Sub-Pixel Convolutional Neural Network"
+    """
+    # Ensure tensor has the right shape
+    batch_size, channels, depth, height, width = tensor.shape
+
+    c = scale ** 3
+    new_depth = depth // scale
+    new_height = height // scale
+    new_width = width // scale
+
+    # Reshape and permute to rearrange data
+    tensor = tensor.contiguous().view(
+        batch_size, channels,
+        new_depth, scale,
+        new_height, scale,
+        new_width, scale
+    )
+    tensor = tensor.permute(0, 1, 3, 5, 7, 2, 4, 6)
+    tensor = tensor.contiguous().view(
+        batch_size, c, new_depth, new_height, new_width
+    )
+    
+    return tensor

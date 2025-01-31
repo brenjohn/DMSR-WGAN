@@ -46,6 +46,21 @@ def get_displacement_field(positions, ids, box_size, grid_size):
     return displacement_field
 
 
+def get_velocity_field(velocities, ids, box_size, grid_size):
+    """Creates a velocity field from the given particle velocities and
+    particle IDs.
+    """
+    # Use the particle IDs to compute particle grid indices (ix, iy, iz).
+    ix = ids // (grid_size * grid_size)
+    iy = (ids % (grid_size * grid_size)) // grid_size
+    iz = ids % grid_size
+    
+    # Arrange displacements into a field and return it.
+    velocity_field = np.zeros((3, grid_size, grid_size, grid_size))
+    velocity_field[:, ix, iy, iz] = velocities
+    return velocity_field
+
+
 def get_positions(displacement_field, box_size, grid_size, periodic=True):
     """Creates an array containing the absolute coordinates of particles from 
     the given displacement field.

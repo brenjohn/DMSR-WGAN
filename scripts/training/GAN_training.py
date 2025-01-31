@@ -33,7 +33,7 @@ print(f"Using device: {device}")
 #                      Generator and Critic Models
 #=============================================================================#
 lr_grid_size   = 20
-input_channels = 3
+input_channels = 6
 base_channels  = 64 
 crop_size      = 2
 scale_factor   = 2
@@ -44,11 +44,11 @@ generator = DMSRGenerator(
 
 hr_grid_size      = generator.output_size
 critic_input_size = hr_grid_size
-input_channels    = 8
+input_channels    = 20
 base_channels     = 64
 
 critic = DMSRCritic(
-    critic_input_size, input_channels, base_channels
+    critic_input_size, input_channels, base_channels, 2
 )
 
 generator.to(device)
@@ -71,7 +71,7 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_trainingx8/'
+data_directory = '../../data/dmsr_training/'
 batch_size = 4
 
 data = load_numpy_dataset(data_directory)
@@ -82,7 +82,7 @@ LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 lr_padding = 2
 
 dataset = DMSRDataset(
-    LR_data.float(), HR_data.float(), augment=True
+    LR_data.float(), HR_data.float(), augment=False
 )
 
 dataloader = DataLoader(
@@ -183,20 +183,20 @@ gan.set_monitor(monitor_manager)
 
 # validator = SupervisedMonitor(generator, valid_dataloader, device)
 
-supervised_epochs = 5
-gan.train(
-    supervised_epochs, 
-    train_step = gan.generator_supervised_step
-)
-gan.train(
-    supervised_epochs, 
-    train_step = gan.critic_supervised_step
-)
+# supervised_epochs = 5
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.generator_supervised_step
+# )
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.critic_supervised_step
+# )
 
 
 #=============================================================================#
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 2
+num_epochs = 1
 gan.train(num_epochs)
