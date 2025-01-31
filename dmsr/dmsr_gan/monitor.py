@@ -74,7 +74,10 @@ class MonitorManager():
         self.epoch_start_time = time.time()
         self.batch_start_time = time.time()
         post_processing_time = time.time() - post_processing_start_time
-        print(f"[Epoch post-processing took: {post_processing_time:.4f} sec]")
+        print(
+            f"[Epoch post-processing took: {post_processing_time:.4f} sec]",
+            flush=True
+        )
     
         
     def end_of_batch(self, epoch, batch, batch_counter, losses):
