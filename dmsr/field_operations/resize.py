@@ -96,10 +96,10 @@ def pixel_unshuffle(tensor, scale):
     # Ensure tensor has the right shape
     batch_size, channels, depth, height, width = tensor.shape
 
-    c = scale ** 3
-    new_depth = depth // scale
-    new_height = height // scale
-    new_width = width // scale
+    new_channels = channels * scale**3
+    new_depth    = depth  // scale
+    new_height   = height // scale
+    new_width    = width  // scale
 
     # Reshape and permute to rearrange data
     tensor = tensor.contiguous().view(
@@ -110,7 +110,7 @@ def pixel_unshuffle(tensor, scale):
     )
     tensor = tensor.permute(0, 1, 3, 5, 7, 2, 4, 6)
     tensor = tensor.contiguous().view(
-        batch_size, c, new_depth, new_height, new_width
+        batch_size, new_channels, new_depth, new_height, new_width
     )
     
     return tensor

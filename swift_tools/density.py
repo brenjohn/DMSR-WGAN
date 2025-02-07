@@ -12,7 +12,7 @@ density fields from position data.
 import numpy as np
 
 
-def cloud_in_cells(particles, grid_size, box_size):
+def cloud_in_cells(particles, grid_size, box_size, value=1):
     """Converts particle coordinates into a density field with shape 
     (grid_size, grid_size, grid_size) using Cloud-in-Cells (CIC) interpolation.
 
@@ -62,7 +62,7 @@ def cloud_in_cells(particles, grid_size, box_size):
     # Accumulate density contributions
     density_field = np.zeros((grid_size, grid_size, grid_size))
     for weight, (nx, ny, nz) in zip(weights, neighbors):
-        np.add.at(density_field, (nx, ny, nz), weight)
+        np.add.at(density_field, (nx, ny, nz), value * weight)
 
     # Normalize by cell volume to get density
     density_field /= cell_size**3

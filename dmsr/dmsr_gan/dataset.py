@@ -9,28 +9,71 @@ This file define a DMSR-Dataset class for handling training data for a
 DMSR-WGAN model.
 """
 
+import torch
+
 from torch.utils.data import Dataset
-from ..field_operations.augmentation import random_transformation
+from ..field_operations.augmentation import permute_tensor
 
 
 class DMSRDataset(Dataset):
     """A Dataset class for holding training data for the DMSR-WGAN.
     """
     
-    def __init__(self, lr_data, hr_data, augment=True):
-        self.lr_data = lr_data
-        self.hr_data = hr_data
+    def __init__(
+            self, 
+            lr_position, 
+            hr_position,
+            lr_velocity = None,
+            hr_velocity = None,
+            augment     = True
+        ):
+        self.lr_position = lr_position
+        self.hr_position = hr_position
+        self.lr_velocity = lr_velocity
+        self.hr_velocity = hr_velocity
+        self.velocities_included = not lr_velocity is None
         self.augment = augment
-
+        
+    
     def __len__(self):
-        return self.lr_data.size(0)
-
+        return self.lr_position.size(0)
+    
+    
     def __getitem__(self, idx):
-        lr = self.lr_data[idx]
-        hr = self.hr_data[idx]
+        lr_data = self.lr_position[idx]
+        hr_data = self.hr_position[idx]
 
         # Apply augmentation (random flip/permutation) if specified
         if self.augment:
-            lr, hr = random_transformation(lr, hr)
+            random_perm = torch.randperm(3)
+            lr_data = permute_tensor(lr_data, random_perm)
+            hr_data = permute_tensor(hr_data, random_perm)
+                
+        if self.velocities_included:
+            lr_velocity = self.lr_velocity[idx]
+            hr_velocity = self.hr_velocity[idx]
             
-        return lr, hr
+            if self.augment:
+                lr_velocity = permute_tensor(lr_velocity, random_perm)
+                hr_velocity = permute_tensor(hr_velocity, random_perm)
+            
+            lr_data = torch.concat((lr_data, lr_velocity))
+            hr_data = torch.concat((hr_data, hr_velocity))
+        
+        return lr_data, hr_data
+    
+    
+    def normalise_dataset(self):
+        """
+        """
+        params = {}
+        field_names = ["lr_position", "hr_position"]
+        if self.velocities_included:
+            field_names += ["lr_velocity", "hr_velocity"]
+        
+        for field in field_names:
+            standard_deviation = vars(self)[field].std()
+            params[field + "_std"] = standard_deviation
+            vars(self)[field] /= standard_deviation
+        
+        return params
