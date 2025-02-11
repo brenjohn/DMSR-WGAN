@@ -13,7 +13,7 @@ sys.path.append("../..")
 import time
 import torch
 
-from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
+from dmsr.dmsr_gan import DMSRGenerator
 
 # Check if CUDA is available and set the device
 gpu_id = 0

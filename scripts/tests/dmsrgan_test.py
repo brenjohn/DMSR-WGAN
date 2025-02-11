@@ -16,11 +16,10 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dmsr.dmsr_gan.dmsr_wgan import DMSRWGAN
-from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
-from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
-
-from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
+from dmsr.dmsr_gan import DMSRWGAN
+from dmsr.dmsr_gan import DMSRDensityCritic
+from dmsr.dmsr_gan import DMSRGenerator
+from dmsr.dmsr_gan import DMSRDataset
 
 
 # Check if CUDA is available and set the device
@@ -47,7 +46,7 @@ displacement_size = hr_grid_size
 density_channels  = 4
 main_channels     = 8
 
-critic = DMSRCritic(
+critic = DMSRDensityCritic(
     density_size, displacement_size, density_channels, main_channels
 )
 

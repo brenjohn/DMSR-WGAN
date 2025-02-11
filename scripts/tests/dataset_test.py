@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 
-from dmsr.swift_processing import load_numpy_dataset
-from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
+from swift_tools.data import load_numpy_dataset
+from dmsr.dmsr_gan import DMSRDataset
 from dmsr.field_operations.conversion import displacements_to_positions
 
 
@@ -54,7 +54,7 @@ for lr_batch, hr_batch in dataloader:
     print(lr_batch.shape)
     print(hr_batch.shape)
     
-    lr_positions = displacements_to_positions(lr_batch, 20*box_size/14) - (3 * box_size/14)
+    lr_positions = displacements_to_positions(lr_batch, 20*box_size/16) - (2 * box_size/16)
     hr_positions = displacements_to_positions(hr_batch, box_size)
     plot_positions(lr_positions)
     plot_positions(hr_positions)
@@ -70,3 +70,13 @@ for lr_batch, hr_batch in dataloader:
 # plot_positions(lr_positions)
 # plot_positions(hr_positions)
 # plot_positions(sr_positions.detach())
+
+
+#%%
+disp, bin_edges, _ = plt.hist(LR_data[:, 0:3, ...].reshape(-1), bins=50)
+plt.show()
+plt.close()
+
+vel, bin_edges, _ = plt.hist(LR_data[:, 3:6, ...].reshape(-1)/50, bins=50)
+plt.show()
+plt.close()

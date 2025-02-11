@@ -24,7 +24,7 @@ from dmsr.field_operations.conversion import cic_density_field
 data_directory = '../../data/dmsr_training/'
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
-HR_data = HR_data[:1, ...]
+HR_data = HR_data[:1, :3, ...]
 
 
 #%% Creating a scatter plot of particle positions.

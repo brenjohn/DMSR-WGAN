@@ -70,8 +70,9 @@ def stitch_fields(patches, patches_per_dim):
     """
     
     patch_size = patches[0].shape[-1]
+    channels = patches[0].shape[-4]
     field_size = patch_size * patches_per_dim
-    field = np.zeros((3, field_size, field_size, field_size))
+    field = np.zeros((channels, field_size, field_size, field_size))
     
     for n, patch in enumerate(patches):
         i = n // patches_per_dim**2

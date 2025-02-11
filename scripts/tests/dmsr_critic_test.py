@@ -13,7 +13,7 @@ import time
 import torch
 
 from torch import autograd
-from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
+from dmsr.dmsr_gan import DMSRDensityCritic
 
 
 batch_size = 3
@@ -21,7 +21,7 @@ density_size = 2 * 32 + 4
 displacement_size = 32
 density_channels = 16
 main_channels = 16
-critic = DMSRCritic(density_size, displacement_size, density_channels, main_channels)
+critic = DMSRDensityCritic(density_size, displacement_size, density_channels, main_channels)
 
 #%% Foward Pass
 disp = torch.randn(

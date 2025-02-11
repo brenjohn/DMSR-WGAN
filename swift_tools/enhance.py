@@ -12,11 +12,12 @@ import shutil
 import h5py as h5
 import numpy as np
 
-from .positions import get_displacement_field, get_positions
+from .positions import get_positions
+from .positions import get_displacement_field, get_velocity_field
 from dmsr.field_operations.resize import cut_field, stitch_fields
 
 
-def enhance(lr_snapshot, sr_snapshot, generator, device):
+def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
     """
     Use the given generator to enhance the `lr_snapshot` and save the result in
     `sr_snapshot`
@@ -31,47 +32,75 @@ def enhance(lr_snapshot, sr_snapshot, generator, device):
         dm_data = sr_file['DMParticles']
         
         update_particle_mass(dm_data, scale_factor)
-        update_particle_velocities(dm_data, scale_factor)
         update_potentials(dm_data, scale_factor)
         update_softenings(dm_data, scale_factor)
-        update_particle_data(sr_file, generator, device)
+        update_particle_data(sr_file, generator, scale_params, device)
         
         grid_size = sr_file['ICs_parameters'].attrs['Grid Resolution']
         sr_grid_size = scale_factor * grid_size
         sr_file['ICs_parameters'].attrs['Grid Resolution'] = sr_grid_size
     
     
-def update_particle_data(file, generator, device):
+def update_particle_data(file, generator, scale_params, device):
     """
     Use the given generator to upscale the particle data in the given file.
     """
+    generator.compute_input_padding()
+    cut_size           = generator.inner_region
+    stride             = cut_size
+    pad                = generator.padding
+    scale_factor       = generator.scale_factor
+    z                  = generator.sample_latent_space(1, device)
+    upscale_velocities = generator.input_channels == 6
+    
+    lr_position_std = scale_params.get('lr_position_std', 1)
+    hr_position_std = scale_params.get('hr_position_std', 1)
+    
     dm_data   = file['DMParticles']
     grid_size = file['ICs_parameters'].attrs['Grid Resolution']
     box_size  = file['Header'].attrs['BoxSize'][0]
     ids       = np.asarray(dm_data['ParticleIDs'])
+    
     positions = np.asarray(dm_data['Coordinates'])
     positions = positions.transpose()
+    fields    = get_displacement_field(positions, ids, box_size, grid_size)
+    fields /= lr_position_std
     
-    generator.compute_input_padding()
-    cut_size = generator.inner_region
-    stride = cut_size
-    pad = generator.padding
-    z = generator.sample_latent_space(1, device)
+    if upscale_velocities:
+        lr_velocity_std = scale_params.get('lr_velocity_std', 1)
+        hr_velocity_std = scale_params.get('hr_velocity_std', 1)
+        
+        velocity = np.asarray(dm_data['Velocities'])
+        velocity = velocity.transpose()
+        velocity = get_velocity_field(velocity, ids, box_size, grid_size)
+        velocity /= lr_velocity_std
+        fields   = np.concatenate((fields, velocity))
+    else:
+        zero_particle_velocities(dm_data, scale_factor)
     
-    displacements = get_displacement_field(positions, ids, box_size, grid_size)
-    field_patches = cut_field(displacements[None, ...], cut_size, stride, pad)
+    field_patches = cut_field(fields[None, ...], cut_size, stride, pad)
 
     sr_patches = []
     for patch in field_patches:
-        patch = torch.from_numpy(patch).to(torch.float)
+        patch = torch.from_numpy(patch).float()
         sr_patch = generator(patch[None, ...], z)
         sr_patch = sr_patch.detach()
         sr_patches.append(sr_patch.numpy())
     
-    scale_factor = generator.scale_factor
+    # TODO: patches per dim = 4 should come from the user or metadata somehow.
     sr_grid_size = scale_factor * grid_size
-    displacement_field = stitch_fields(sr_patches, 4)
-    sr_positions = get_positions(displacement_field, box_size, sr_grid_size)
+    sr_field = stitch_fields(sr_patches, 4)
+    
+    if upscale_velocities:
+        sr_displacement = sr_field[:3, ...] * hr_position_std
+        sr_velocity     = sr_field[3:, ...] * hr_velocity_std
+        sr_velocities = sr_velocity.reshape(3, -1)
+        sr_velocities = sr_velocities.transpose()
+    else:
+        sr_displacement = sr_field * hr_position_std
+    del sr_field
+        
+    sr_positions = get_positions(sr_displacement, box_size, sr_grid_size)
     sr_positions = sr_positions.transpose()
     sr_ids = np.arange(sr_grid_size**3)
 
@@ -79,6 +108,20 @@ def update_particle_data(file, generator, device):
     dm_data.create_dataset('Coordinates', data=sr_positions)
     del dm_data['ParticleIDs']
     dm_data.create_dataset('ParticleIDs', data=sr_ids)
+    
+    if upscale_velocities:
+        del dm_data['Velocities']
+        dm_data.create_dataset('Velocities', data=sr_velocities)
+        
+    
+
+def zero_particle_velocities(dm_data, scale_factor):
+    """Replaces velocity data with zeros.
+    """
+    new_velocities = np.zeros_like(dm_data['Velocities'])
+    new_velocities = np.tile(new_velocities, (scale_factor**3, 1))
+    del dm_data['Velocities']
+    dm_data.create_dataset('Velocities', data=new_velocities)
 
 
 def update_particle_mass(dm_data, scale_factor):
@@ -89,15 +132,6 @@ def update_particle_mass(dm_data, scale_factor):
     new_mass = np.tile(new_mass, scale_factor**3)
     del dm_data['Masses']
     dm_data.create_dataset('Masses', data=new_mass)
-    
-
-def update_particle_velocities(dm_data, scale_factor):
-    """Replaces velocity data with zeros.
-    """
-    new_velocities = np.zeros_like(dm_data['Velocities'])
-    new_velocities = np.tile(new_velocities, (scale_factor**3, 1))
-    del dm_data['Velocities']
-    dm_data.create_dataset('Velocities', data=new_velocities)
     
     
 def update_potentials(dm_data, scale_factor):
