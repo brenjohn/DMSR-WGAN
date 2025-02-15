@@ -4,6 +4,9 @@
 Created on Thu Jan 23 11:50:49 2025
 
 @author: brennan
+
+This file defines functions for enhancing the dark matter data in a swift 
+snapshot using a dmsr generator model.
 """
 
 import os
@@ -12,9 +15,9 @@ import shutil
 import h5py as h5
 import numpy as np
 
-from .positions import get_positions
-from .positions import get_displacement_field, get_velocity_field
-from dmsr.field_operations.resize import cut_field, stitch_fields
+from .fields import get_positions
+from .fields import get_displacement_field, get_velocity_field
+from .fields import cut_field, stitch_fields
 
 
 def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
@@ -47,7 +50,7 @@ def update_particle_data(file, generator, scale_params, device):
     """
     generator.compute_input_padding()
     cut_size           = generator.inner_region
-    stride             = cut_size
+    output_size        = generator.output_size
     pad                = generator.padding
     scale_factor       = generator.scale_factor
     z                  = generator.sample_latent_space(1, device)
@@ -61,9 +64,9 @@ def update_particle_data(file, generator, scale_params, device):
     box_size  = file['Header'].attrs['BoxSize'][0]
     ids       = np.asarray(dm_data['ParticleIDs'])
     
-    positions = np.asarray(dm_data['Coordinates'])
-    positions = positions.transpose()
-    fields    = get_displacement_field(positions, ids, box_size, grid_size)
+    fields = np.asarray(dm_data['Coordinates'])
+    fields = fields.transpose()
+    fields = get_displacement_field(fields, ids, box_size, grid_size)
     fields /= lr_position_std
     
     if upscale_velocities:
@@ -75,21 +78,25 @@ def update_particle_data(file, generator, scale_params, device):
         velocity = get_velocity_field(velocity, ids, box_size, grid_size)
         velocity /= lr_velocity_std
         fields   = np.concatenate((fields, velocity))
+        del velocity
     else:
         zero_particle_velocities(dm_data, scale_factor)
     
-    field_patches = cut_field(fields[None, ...], cut_size, stride, pad)
+    fields = cut_field(fields[None, ...], cut_size, cut_size, pad)
 
     sr_patches = []
-    for patch in field_patches:
+    for patch in fields:
         patch = torch.from_numpy(patch).float()
         sr_patch = generator(patch[None, ...], z)
         sr_patch = sr_patch.detach()
         sr_patches.append(sr_patch.numpy())
+    del fields
     
-    # TODO: patches per dim = 4 should come from the user or metadata somehow.
     sr_grid_size = scale_factor * grid_size
-    sr_field = stitch_fields(sr_patches, 4)
+    patches_per_dim = sr_grid_size // output_size
+    volume_covered = sr_grid_size == patches_per_dim * output_size
+    assert volume_covered, 'Volume not covered by SR patches'
+    sr_field = stitch_fields(sr_patches, patches_per_dim)
     
     if upscale_velocities:
         sr_displacement = sr_field[:3, ...] * hr_position_std

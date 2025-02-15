@@ -244,22 +244,18 @@ class SamplesMonitor(BaseMonitor):
             self,
             generator, 
             lr_sample, 
-            hr_sample, 
-            lr_box_size, 
-            hr_box_size,
+            hr_sample,
             device,
             samples_dir = './data/samples/'
         ):
         
         self.lr_sample = lr_sample
         self.hr_sample = hr_sample
-        self.lr_box_size = lr_box_size
-        self.hr_box_size = hr_box_size
         
         self.device = device
         self.generator = generator
         batch_size = lr_sample.shape[0]
-        # TODO: Manage the  creation and movement of the latent space variable
+        # TODO: Manage the creation and movement of the latent space variable
         # in a cleaner way.
         z = generator.sample_latent_space(batch_size, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
@@ -321,13 +317,11 @@ class UpscaleMonitor(BaseMonitor):
         ):
         """Set the dataset to be used for computing the uniform metric.
         """
-        self.lr_data = lr_data
-        self.mass = particle_mass
-        self.box_size = box_size
-        self.grid_size = grid_size
-        
-        hr_spectra = self.get_spectra(hr_data)
-        self.hr_spectra = hr_spectra
+        self.lr_data    = lr_data
+        self.mass       = particle_mass
+        self.box_size   = box_size
+        self.grid_size  = grid_size
+        self.hr_spectra = self.get_spectra(hr_data)
         
         
     def get_spectra(self, displacements):
@@ -377,7 +371,7 @@ class UpscaleMonitor(BaseMonitor):
             uniform_metric = max(uniform_metric, metric.item())
             
             # Compute the L2 metric between the real and fake spectra.
-            metric = self.l2_metric(sr_spectrum, hr_spectrum)
+            metric = self.l2_metric(sr_spectrum, hr_spectrum, sr_ks)
             l2_metric += metric.item()
         
         l2_metric /= len(self.lr_data)
@@ -416,8 +410,8 @@ class UpscaleMonitor(BaseMonitor):
         return torch.max(torch.abs(spectrum_a - spectrum_b))
     
     
-    def l2_metric(self, spectrum_a, spectrum_b):
-        return torch.sum((spectrum_a - spectrum_b) ** 2)**0.5
+    def l2_metric(self, spectrum_a, spectrum_b, ks):
+        return torch.trapezoid((spectrum_a - spectrum_b) ** 2, ks)**0.5
 
 
 

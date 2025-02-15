@@ -5,7 +5,7 @@ Created on Fri Sep 13 13:45:00 2024
 
 @author: brennan
 
-This file define a DMSR-Dataset class for handling training data for a 
+This file defines a DMSR-Dataset class for handling training data for a 
 DMSR-WGAN model.
 """
 
@@ -64,7 +64,9 @@ class DMSRDataset(Dataset):
     
     
     def normalise_dataset(self):
-        """
+        """Scales position and velocity data by dividing by their respective
+        standard deviations. The standard deviations are also returned as a
+        dictionary.
         """
         params = {}
         field_names = ["lr_position", "hr_position"]
@@ -73,7 +75,7 @@ class DMSRDataset(Dataset):
         
         for field in field_names:
             standard_deviation = vars(self)[field].std()
-            params[field + "_std"] = standard_deviation
+            params[field + "_std"] = standard_deviation.item()
             vars(self)[field] /= standard_deviation
         
         return params

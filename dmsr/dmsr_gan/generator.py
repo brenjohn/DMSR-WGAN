@@ -24,7 +24,7 @@ class DMSRGenerator(nn.Module):
                  input_channels,
                  base_channels,
                  crop_size=0,
-                 scale_factor=8,
+                 scale_factor=4,
                  **kwargs
         ):
         super().__init__()
@@ -35,6 +35,7 @@ class DMSRGenerator(nn.Module):
         self.crop_size      = crop_size
         
         self.build_generator_components()
+        self.compute_input_padding()
 
 
     def build_generator_components(self):

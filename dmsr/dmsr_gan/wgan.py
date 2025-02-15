@@ -24,11 +24,13 @@ class DMSRWGAN:
     Generative Adversarial Neural Networks.
     """
     
-    def __init__(self, generator, critic, device):
+    def __init__(self, generator, critic, device, gradient_penalty_rate=16):
         self.generator = generator
         self.critic = critic
         self.device = device
+        self.gradient_penalty_rate = gradient_penalty_rate
         self.batch_counter = 0
+        self.scale_factor = generator.scale_factor
         self.mse_loss = MSELoss()
         
         
@@ -36,14 +38,10 @@ class DMSRWGAN:
             self, 
             dataloader, 
             batch_size, 
-            box_size, 
-            lr_padding, 
-            scale_factor
+            box_size,
         ):
         self.data = dataloader
         self.box_size = box_size
-        self.lr_padding = lr_padding
-        self.scale_factor = scale_factor
         self.batch_size = batch_size
         
         
@@ -107,7 +105,7 @@ class DMSRWGAN:
         hr_batch = hr_batch.to(self.device)
         
         # Prepare upscaled data
-        us_batch = crop(lr_batch, self.lr_padding)
+        us_batch = crop(lr_batch, self.generator.padding)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
         ).detach()
@@ -129,12 +127,11 @@ class DMSRWGAN:
         hr_batch = hr_batch.to(self.device)
         
         # Prepare upscaled data
-        us_batch = crop(lr_batch, self.lr_padding)
+        us_batch = crop(lr_batch, self.generator.padding)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
         ).detach()
         
-        # TODO: Maybe add random augmentation to data before generator step.
         # Train the critic and generator models.
         critic_losses = self.critic_train_step(lr_batch, hr_batch, us_batch)
         generator_losses = self.generator_train_step(lr_batch, us_batch)
@@ -167,7 +164,7 @@ class DMSRWGAN:
         losses = {'critic_loss' : critic_loss.item()}
         
         # Add the gradient penalty term to the loss.
-        if self.batch_counter % 16 == 0:
+        if self.batch_counter % self.gradient_penalty_rate == 0:
             gradient_penalty = self.critic.gradient_penalty(
                 self.batch_size, *real_data, *fake_data, self.device
             )
@@ -230,7 +227,8 @@ class DMSRWGAN:
         save(optimizer_states, model_dir + 'optimizers.pth')
         
         attributes = {
-            'batch_counter' : self.batch_counter
+            'batch_counter'         : self.batch_counter,
+            'gradient_penalty_rate' : self.gradient_penalty_rate
         }
         save(attributes, model_dir + 'attributes.pth')
         

@@ -12,7 +12,8 @@ import torch
 import h5py as h5
 import numpy as np
 
-from .positions import get_displacement_field, get_velocity_field
+from os.path import exists
+from .fields import get_displacement_field, get_velocity_field
 
 
 def read_snapshot(snapshot):
@@ -74,3 +75,20 @@ def load_numpy_dataset(data_directory):
     box_size, HR_patch_size, LR_size, HR_size, LR_mass, HR_mass = meta_data
     
     return LR_data, HR_data, HR_patch_size, LR_size, HR_size
+
+
+def load_normalisation_parameters(param_file):
+    """Reads the standard deviations from the given .npy file used to noramlise
+    dmsr training data.
+    """
+    lr_pos_std = hr_pos_std = lr_vel_std = hr_vel_std = 1
+    
+    if exists(param_file):
+        scale_params = np.load(param_file, allow_pickle=True).item()
+        scale_params = {k : v.item() for k, v in scale_params.items()}
+        lr_pos_std = scale_params.get('lr_position_std', 1)
+        hr_pos_std = scale_params.get('hr_position_std', 1)
+        lr_vel_std = scale_params.get('lr_velocity_std', 1)
+        hr_vel_std = scale_params.get('hr_velocity_std', 1)
+    
+    return lr_pos_std, hr_pos_std, lr_vel_std, hr_vel_std
