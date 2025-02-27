@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 13 12:19:20 2024
+Created on Tue Jan 28 15:46:51 2025
 
 @author: brennan
 
-This file defines the critic model used by the DMSR-WGAN model.
+This file defines a generalised critic model for the the DMSR-WGAN with an
+additional branch for processing density field data.
 """
 
 import torch
 import torch.nn as nn
 
-from torch.nn.functional import interpolate
-from ..field_operations.resize import crop
+from torch import concat, rand, autograd
+from ..field_operations.conversion import cic_density_field
+from .blocks import ResidualBlock
 
 
-class DMSRCritic(nn.Module):
-    """The critic model for the DMSR-WGAN.
+class DMSRDensityCritic(nn.Module):
+    """A generalized critic model for the DMSR-WGAN. The model is similar to
+    the DMSRCritic model but with an additional density branch.
     """
     
     def __init__(
@@ -32,7 +35,6 @@ class DMSRCritic(nn.Module):
         self.displacement_size = displacement_size
         self.density_channels = density_channels
         self.main_channels = main_channels
-        
         self.build_critic_components()
         
         
@@ -41,7 +43,7 @@ class DMSRCritic(nn.Module):
         
         The output sizes of residual blocks are also computed.
         
-        Returns two lists for the main and denisty branches of the model
+        Returns two lists for the main and density branches of the model
         containing (channel_in, channel_out, out_size) tuples for each residual
         block in each branch.
         """
@@ -79,7 +81,6 @@ class DMSRCritic(nn.Module):
             )
             channels_curr = channels_next
             channels_next = channels_curr * 2
-        
         
         return density_blocks, main_blocks
         
@@ -150,6 +151,8 @@ class DMSRCritic(nn.Module):
 
 
     def forward(self, displacements, densities):
+        """Forward pass of the critic.
+        """
         
         y = self.density_initial_block(densities)
         for block in self.density_blocks:
@@ -160,53 +163,57 @@ class DMSRCritic(nn.Module):
         for block in self.main_blocks:
             x = block(x)
 
-        x = self.aggregate_block(x)
-
-        return x.flatten()
+        return self.aggregate_block(x).flatten()
     
     
-
-class ResidualBlock(nn.Module):
-    """The Residual block used in the critic model.
+    def prepare_batch(self, hr_batch, lr_batch, box_size):
+        """Prepare input data for the critic.
+        """
+        density_size = self.density_size
+        lr_density = cic_density_field(lr_batch, box_size, density_size)
+        hr_density = cic_density_field(hr_batch, box_size, density_size)
+        displacement = concat((hr_batch, lr_batch), dim=1).detach()
+        density = concat((hr_density, lr_density), dim=1).detach()
+        return (displacement, density)
     
-    Residual convolution blocks have the following structure:
     
-              (input)
-                 |
-                 |-------------------->|
-                 |                     |
-          Convolution (3x3x3)  Convolution (1x1x1)
-                 |                     |
-          Convolution (3x3x3)       Crop 2
-                 |                     |
-                 + <-------------------|
-                 |
-          Linear Downsample
-                 |
-             (output)
-    
-    Note, The output tensor has size `next_size = (prev_size - 4) / 2`, where 
-    odd sizes are rounded down by the downsampling method.
-    """
-    
-    def __init__(self, channels_curr, channels_next):
-        super().__init__()
-        self.skip = nn.Conv3d(channels_curr, channels_next, 1)
-        self.convs = nn.Sequential(
-            nn.Conv3d(channels_curr, channels_curr, 3),
-            nn.PReLU(),
-            nn.Conv3d(channels_curr, channels_next, 3),
-            nn.PReLU(),
-        )
-            
-
-    def forward(self, x):
-        # Skip connection
-        y = x
-        y = self.skip(y)
-        y = crop(y, 2)
+    def gradient_penalty(
+            self, 
+            batch_size, 
+            real_displacements,
+            real_density,
+            fake_displacements,
+            fake_density,
+            device, 
+            weight=10
+        ):
+        """Calculate the gradient penalty.
+        """
+        # Create data by interpolating real and fake data and random amount.
+        alpha = rand(batch_size, device=device).view(batch_size, 1, 1, 1, 1)
+        displacements  = real_displacements * alpha
+        displacements += fake_displacements * (1 - alpha)
+        density  = real_density * alpha
+        density += fake_density * (1 - alpha)
         
-        x = self.convs(x)
-        x = x + y
-        x = interpolate(x, scale_factor=0.5, mode='trilinear')
-        return x
+        # Score the new data with the critic model and get its derivative.
+        score = self.forward(
+            displacements.requires_grad_(True), density.requires_grad_(True)
+        )
+        score = score.sum()
+        displacement_grad, density_grad = autograd.grad(
+            score,
+            (displacements, density),
+            retain_graph=True,
+            create_graph=True,
+            only_inputs=True,
+        )
+        
+        # Compute the gradient penalty term.
+        density_grad = density_grad.flatten(start_dim=1)
+        displacement_grad = displacement_grad.flatten(start_dim=1)
+        grad = concat((displacement_grad, density_grad), dim=1)
+        penalty = (weight * ((grad.norm(p=2, dim=1) - 1) ** 2).mean()
+            + 0 * score  # hack to trigger DDP allreduce hooks
+        )
+        return penalty

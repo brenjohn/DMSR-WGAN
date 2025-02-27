@@ -23,6 +23,8 @@ from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import DMSRDataset
 from dmsr.data_tools import load_numpy_dataset
+from dmsr.data_tools import generate_mock_data
+
 
 # Check if CUDA is available and set the device
 gpu_id = 0
@@ -38,9 +40,9 @@ os.makedirs(output_dir, exist_ok=True)
 #=============================================================================#
 lr_grid_size   = 20
 input_channels = 6
-base_channels  = 128 
+base_channels  = 64 
 crop_size      = 2
-scale_factor   = 4
+scale_factor   = 2
 
 generator = DMSRGenerator(
     lr_grid_size, input_channels, base_channels, crop_size, scale_factor
@@ -49,7 +51,7 @@ generator = DMSRGenerator(
 hr_grid_size      = generator.output_size
 critic_input_size = hr_grid_size
 input_channels    = 20
-base_channels     = 128
+base_channels     = 64
 
 critic = DMSRCritic(
     critic_input_size, input_channels, base_channels, 2
@@ -75,10 +77,12 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_training_velocity_x64/'
 batch_size = 4
+lr_padding = generator.padding
 
-data = load_numpy_dataset(data_directory)
+# data_directory = '../../data/dmsr_training/'
+# data = load_numpy_dataset(data_directory)
+data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
 # Split data into displacements and velocities.
@@ -105,9 +109,10 @@ hr_position_std = noramalisation_params['hr_position_std']
 #=============================================================================#
 #                           Validation Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_validation_velocity_x64/'
+# data_directory = 'path/to/validation/data/directory'
+# data = load_numpy_dataset(data_directory)
 
-data = load_numpy_dataset(data_directory)
+data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
 LR_data[:, :3, ...] /= noramalisation_params['lr_position_std']
@@ -127,7 +132,7 @@ gan.set_dataset(
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./velocity_run/checkpoints/current_model/')
+# gan.load('./level_0_run/checkpoints/current_model/')
 
 
 #=============================================================================#
@@ -176,7 +181,7 @@ upscaling_monitor.set_data_set(
     LR_data.float(), 
     HR_data.float(), 
     particle_mass, 
-    hr_box_size, 
+    box_size, 
     grid_size
 )
 monitors['upscaling_monitor'] = upscaling_monitor
@@ -202,20 +207,20 @@ gan.set_monitor(monitor_manager)
 
 # validator = SupervisedMonitor(generator, valid_dataloader, device)
 
-# supervised_epochs = 5
-# gan.train(
-#     supervised_epochs, 
-#     train_step = gan.generator_supervised_step
-# )
-# gan.train(
-#     supervised_epochs, 
-#     train_step = gan.critic_supervised_step
-# )
+supervised_epochs = 1
+gan.train(
+    supervised_epochs, 
+    train_step = gan.generator_supervised_step
+)
+gan.train(
+    supervised_epochs, 
+    train_step = gan.critic_supervised_step
+)
 
 
 #=============================================================================#
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1024
+num_epochs = 1
 gan.train(num_epochs)

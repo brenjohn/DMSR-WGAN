@@ -12,105 +12,12 @@ to handle monitor objects during training.
 """
 
 import os
-import time
 import torch
 import numpy as np
 
 from torch.nn import MSELoss
 from ..analysis import displacement_power_spectrum
 
-
-#=============================================================================#
-#                               Monitor Manager
-#=============================================================================#
-
-class MonitorManager():
-    """A class to manage monitor objects.
-    
-    The Monitor Manager class stores and calls Monitor objects during DMSR-WGAN
-    training at appropriate times.
-    
-    Monitor objects are stored in a monitors dictionary. During DMSR training,
-    at the end of a batch update the `post_batch_processing` method of each 
-    monitor object is called. Similarly, at the end of each epoch, the
-    `post_epoch_processing` method of each monitor is called by the monitor
-    manager.
-    
-    Any messages returned by the `post_batch_processing` calls are passed to a
-    batch report method which prints them along with some information regarding
-    batch/epoch number and timings. At the end of each epoch, the monitor
-    manager also prints some timing information regarding the epoch and epoch
-    post processing.
-    """
-    
-    def __init__(self, report_rate, device):
-        self.device = device
-        self.report_rate = report_rate
-        
-    
-    def set_monitors(self, monitors):
-        self.monitors = monitors
-        
-    
-    def init_monitoring(self, num_epochs, num_batches):
-        """Initializes values for variables used for timing batches and epochs.
-        """
-        self.num_epochs = num_epochs
-        self.num_batches = num_batches
-        self.batch_start_time = time.time()
-        self.epoch_start_time = time.time()
-    
-    
-    def end_of_epoch(self, epoch):
-        """Calls the `post_epoch_processing` method of each monitor.
-        """
-        epoch_time = time.time() - self.epoch_start_time
-        print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
-        post_processing_start_time = time.time()
-        
-        for monitor in self.monitors.values():
-            monitor.post_epoch_processing(epoch)
-        
-        self.epoch_start_time = time.time()
-        self.batch_start_time = time.time()
-        post_processing_time = time.time() - post_processing_start_time
-        print(f"[Epoch post-processing took: {post_processing_time:.4f} sec]")
-    
-        
-    def end_of_batch(self, epoch, batch, batch_counter, losses):
-        """Calls the `post_batch_processing` method of each monitor.
-        """
-        monitor_report = ''
-        
-        for monitor in self.monitors.values():
-            monitor_report += monitor.post_batch_processing(
-                epoch, batch, batch_counter, losses
-            )
-        
-        self.batch_report(epoch, batch, monitor_report)
-    
-    
-    def batch_report(self, epoch, batch, monitor_report):
-        """Report some satistics for the last few batch updates.
-        """
-        if (batch > 0 and batch % self.report_rate == 0):
-            time_curr = time.time()
-            time_prev = self.batch_start_time
-            average_batch_time = (time_curr - time_prev) / self.report_rate
-            
-            report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
-            report += f"[Batch {batch:03}/{self.num_batches}]"
-            report += f"[time per batch: {average_batch_time*1000:.4f} ms]"
-            report += monitor_report
-            
-            print(report)
-            self.batch_start_time = time.time()
-    
-
-
-#=============================================================================#
-#                                 Monitors
-#=============================================================================#
 
 class BaseMonitor():
     
@@ -241,22 +148,18 @@ class SamplesMonitor(BaseMonitor):
             self,
             generator, 
             lr_sample, 
-            hr_sample, 
-            lr_box_size, 
-            hr_box_size,
+            hr_sample,
             device,
             samples_dir = './data/samples/'
         ):
         
         self.lr_sample = lr_sample
         self.hr_sample = hr_sample
-        self.lr_box_size = lr_box_size
-        self.hr_box_size = hr_box_size
         
         self.device = device
         self.generator = generator
         batch_size = lr_sample.shape[0]
-        # TODO: Manage the  creation and movement of the latent space variable
+        # TODO: Manage the creation and movement of the latent space variable
         # in a cleaner way.
         z = generator.sample_latent_space(batch_size, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
@@ -318,13 +221,11 @@ class UpscaleMonitor(BaseMonitor):
         ):
         """Set the dataset to be used for computing the uniform metric.
         """
-        self.lr_data = lr_data
-        self.mass = particle_mass
-        self.box_size = box_size
-        self.grid_size = grid_size
-        
-        hr_spectra = self.get_spectra(hr_data)
-        self.hr_spectra = hr_spectra
+        self.lr_data    = lr_data
+        self.mass       = particle_mass
+        self.box_size   = box_size
+        self.grid_size  = grid_size
+        self.hr_spectra = self.get_spectra(hr_data)
         
         
     def get_spectra(self, displacements):
@@ -333,7 +234,7 @@ class UpscaleMonitor(BaseMonitor):
         """
         spectra = []
         for sample in displacements:
-            sample = sample[None, ...]
+            sample = sample[None, 0:3, ...]
             spectrum = displacement_power_spectrum(
                 sample, self.mass, self.box_size, self.grid_size
             )
@@ -363,6 +264,7 @@ class UpscaleMonitor(BaseMonitor):
             sr_sample = sr_sample.detach()
             
             # Get the power spectrum of the fake data.
+            sr_sample = sr_sample[:, 0:3, ...]
             sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
                 sr_sample, self.mass, self.box_size, self.grid_size
             )
@@ -373,7 +275,7 @@ class UpscaleMonitor(BaseMonitor):
             uniform_metric = max(uniform_metric, metric.item())
             
             # Compute the L2 metric between the real and fake spectra.
-            metric = self.l2_metric(sr_spectrum, hr_spectrum)
+            metric = self.l2_metric(sr_spectrum, hr_spectrum, sr_ks)
             l2_metric += metric.item()
         
         l2_metric /= len(self.lr_data)
@@ -412,8 +314,8 @@ class UpscaleMonitor(BaseMonitor):
         return torch.max(torch.abs(spectrum_a - spectrum_b))
     
     
-    def l2_metric(self, spectrum_a, spectrum_b):
-        return torch.sum((spectrum_a - spectrum_b) ** 2)**0.5
+    def l2_metric(self, spectrum_a, spectrum_b, ks):
+        return torch.trapezoid((spectrum_a - spectrum_b) ** 2, ks)**0.5
 
 
 

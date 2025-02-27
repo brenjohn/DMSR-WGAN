@@ -9,7 +9,7 @@ Created on Thu Sep 26 18:06:39 2024
 import numpy as np
 import matplotlib.pyplot as plt
 
-losses = np.load('./losses.npz')
+losses = np.load('./velocity_run/losses.npz')
 
 critic_loss = losses['critic_loss']
 critic_batches = losses['critic_batches']
@@ -54,5 +54,6 @@ plt.plot(
     generator_batches[window_size//2-1:-window_size//2], moving_average, 
     # color='black'
 )
+# plt.savefig('loss_curve.png', dpi=210)
 plt.show()
 plt.close()

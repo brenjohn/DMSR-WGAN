@@ -17,6 +17,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+from swift_tools.data import load_normalisation_parameters
 from dmsr.field_operations.conversion import displacements_to_positions
 
 def plot_samples(
@@ -77,9 +78,10 @@ def get_xys(positions):
 
 
 #%%
-plots_dir = 'plots/training_samples/'
-data_dir = './data/samples/'
-sr_samples = glob.glob(data_dir + 'sr_sample_*.npy')
+data_dir = './velocity_run/'
+plots_dir = data_dir + 'plots/training_samples/'
+samples_dir = data_dir + 'samples/'
+sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')
 sr_samples = np.sort(sr_samples)
 
 existing_plots = glob.glob(plots_dir + 'particle_plot_epoch_*.png')
@@ -87,15 +89,18 @@ existing_plots = [re.split(r'[._]+', plot)[-2] for plot in existing_plots]
 sr_samples = [sample for sample in sr_samples 
               if not re.split(r'[._]+', sample)[-2] in existing_plots]
 
-lr_sample = np.load(data_dir + 'lr_sample.npy')
-hr_sample = np.load(data_dir + 'hr_sample.npy')
+scale_path = data_dir + 'normalisation.npy'    
+lr_std, hr_std, _, _ = load_normalisation_parameters(scale_path)
+
+lr_sample = np.load(samples_dir + 'lr_sample.npy')[:, :3, ...] * lr_std
+hr_sample = np.load(samples_dir + 'hr_sample.npy')[:, :3, ...] * hr_std
 
 # TODO: read this from metadata
 box_size = 35.56187768431281
 
 for sr_sample in sr_samples:
     epoch = int(re.split(r'[._]+', sr_sample)[-2])
-    sr_sample = np.load(sr_sample)
+    sr_sample = np.load(sr_sample)[:, :3, ...] * hr_std
     
     plot_samples(
         lr_sample, sr_sample, hr_sample, 

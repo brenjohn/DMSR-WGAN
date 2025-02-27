@@ -16,11 +16,10 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dmsr.dmsr_gan.dmsr_wgan import DMSRWGAN
-from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
-from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
-
-from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
+from dmsr.wgan import DMSRWGAN
+from dmsr.wgan import DMSRDensityCritic
+from dmsr.wgan import DMSRGenerator
+from dmsr.data_tools import DMSRDataset
 
 
 # Check if CUDA is available and set the device
@@ -32,13 +31,14 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-lr_grid_size       = 20
-generator_channels = 8 
-crop_size          = 0
-scale_factor       = 2
+LR_grid_size   = 20
+input_channels = 3
+base_channels  = 3
+crop_size      = 2
+scale_factor   = 2
 
 generator = DMSRGenerator(
-    lr_grid_size, generator_channels, crop_size, scale_factor
+    LR_grid_size, input_channels, base_channels, crop_size, scale_factor
 )
 
 hr_grid_size      = generator.output_size
@@ -47,7 +47,7 @@ displacement_size = hr_grid_size
 density_channels  = 4
 main_channels     = 8
 
-critic = DMSRCritic(
+critic = DMSRDensityCritic(
     density_size, displacement_size, density_channels, main_channels
 )
 
@@ -71,14 +71,13 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_training/'
 batch_size = 2
 box_size = 1
 lr_padding = 1
 
 
 lr_data = torch.randn(
-    (batch_size, 3, lr_grid_size, lr_grid_size, lr_grid_size)
+    (batch_size, 3, LR_grid_size, LR_grid_size, LR_grid_size)
 ).float()
 
 hr_data = torch.randn(
@@ -99,7 +98,7 @@ dataloader = DataLoader(
 #                              DMSR WGAN
 #=============================================================================#
 gan = DMSRWGAN(generator, critic, device)
-gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
+gan.set_dataset(dataloader, batch_size, box_size)
 gan.set_optimizer(optimizer_c, optimizer_g)
 
 

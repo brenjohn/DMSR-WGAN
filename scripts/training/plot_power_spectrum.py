@@ -17,6 +17,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+from swift_tools.data import load_normalisation_parameters
 from dmsr.analysis import displacement_power_spectrum
 
 
@@ -57,9 +58,10 @@ def plot_spectra(
 
 
 #%%
-plots_dir = 'plots/training_spectra/'
-data_dir = './data/samples/'
-sr_samples = glob.glob(data_dir + 'sr_sample_*.npy')
+data_dir = './velocity_run/'
+plots_dir = data_dir + 'plots/training_spectra/'
+samples_dir = data_dir + 'samples/'
+sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')
 sr_samples = np.sort(sr_samples)
 
 existing_plots = glob.glob(plots_dir + 'power_sprectrum_epoch_*.png')
@@ -67,10 +69,13 @@ existing_plots = [re.split(r'[._]+', plot)[-2] for plot in existing_plots]
 sr_samples = [sample for sample in sr_samples 
               if not re.split(r'[._]+', sample)[-2] in existing_plots]
 
-lr_sample = np.load(data_dir + 'lr_sample.npy')
-lr_sample = torch.from_numpy(lr_sample)
-hr_sample = np.load(data_dir + 'hr_sample.npy')
-hr_sample = torch.from_numpy(hr_sample)
+scale_path = data_dir + 'normalisation.npy'
+lr_std, hr_std, _, _ = load_normalisation_parameters(scale_path)
+
+lr_sample = np.load(samples_dir + 'lr_sample.npy')
+lr_sample = torch.from_numpy(lr_sample)[:, :3, ...] * lr_std
+hr_sample = np.load(samples_dir + 'hr_sample.npy')
+hr_sample = torch.from_numpy(hr_sample)[:, :3, ...] * hr_std
 
 # TODO: read this from metadata
 box_size = 35.56187768431281
@@ -78,10 +83,10 @@ box_size = 35.56187768431281
 for sr_sample in sr_samples:
     epoch = int(re.split(r'[._]+', sr_sample)[-2])
     sr_sample = np.load(sr_sample)
-    sr_sample = torch.from_numpy(sr_sample)
+    sr_sample = torch.from_numpy(sr_sample)[:, :3, ...] * hr_std
     
     plot_spectra(
         lr_sample, sr_sample, hr_sample,
-        64, 1, 20*box_size/14, box_size, 20, 56,
+        64, 1, 20*box_size/16, box_size, 20, 64,
         epoch, plots_dir
     )
