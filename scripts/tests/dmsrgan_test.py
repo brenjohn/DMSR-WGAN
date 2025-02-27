@@ -31,13 +31,14 @@ print(f"Using device: {device}")
 #=============================================================================#
 #                      Generator and Critic Models
 #=============================================================================#
-lr_grid_size       = 20
-generator_channels = 8 
-crop_size          = 0
-scale_factor       = 2
+LR_grid_size   = 20
+input_channels = 3
+base_channels  = 3
+crop_size      = 2
+scale_factor   = 2
 
 generator = DMSRGenerator(
-    lr_grid_size, generator_channels, crop_size, scale_factor
+    LR_grid_size, input_channels, base_channels, crop_size, scale_factor
 )
 
 hr_grid_size      = generator.output_size
@@ -77,7 +78,7 @@ lr_padding = 1
 
 
 lr_data = torch.randn(
-    (batch_size, 3, lr_grid_size, lr_grid_size, lr_grid_size)
+    (batch_size, 3, LR_grid_size, LR_grid_size, LR_grid_size)
 ).float()
 
 hr_data = torch.randn(
@@ -98,7 +99,7 @@ dataloader = DataLoader(
 #                              DMSR WGAN
 #=============================================================================#
 gan = DMSRWGAN(generator, critic, device)
-gan.set_dataset(dataloader, batch_size, box_size, lr_padding, scale_factor)
+gan.set_dataset(dataloader, batch_size, box_size)
 gan.set_optimizer(optimizer_c, optimizer_g)
 
 

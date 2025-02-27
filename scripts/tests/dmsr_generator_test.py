@@ -22,23 +22,25 @@ print(f"Using device: {device}")
 
 
 #%% Create the generator model
-LR_grid_size       = 20
-generator_channels = 8 
-crop_size          = 0
-scale_factor       = 2
+LR_grid_size   = 20
+input_channels = 3
+base_channels  = 3
+crop_size      = 0
+scale_factor   = 2
 
 generator = DMSRGenerator(
-    LR_grid_size, generator_channels, crop_size, scale_factor
+    LR_grid_size, input_channels, base_channels, crop_size, scale_factor
 )
+
+generator.to(device)
 
 
 #%% Foward Pass
 batch_size = 2
-displacement_size = 20
 
 lr_sample = torch.randn(
-    (batch_size, 3, displacement_size, displacement_size, displacement_size)
-)
+    (batch_size, 3, LR_grid_size, LR_grid_size, LR_grid_size)
+).to(device)
 
 z = generator.sample_latent_space(batch_size, device)
 

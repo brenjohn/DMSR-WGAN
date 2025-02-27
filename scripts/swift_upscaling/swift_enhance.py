@@ -25,7 +25,7 @@ print(f"Using device: {device}")
 ti = time.time()
 
 # Load the generator model.
-dmsr_model_dir = './dmsr_model/'
+dmsr_model_dir = './dmsr_model_velocity_x64/'
 generator = torch.load(dmsr_model_dir + 'generator.pth').to(device)
 
 # Load any scaling parameters if they exist.
@@ -33,7 +33,6 @@ scale_path = dmsr_model_dir + "normalisation.npy"
 scale_params = None
 if exists(scale_path):
     scale_params = np.load(scale_path, allow_pickle=True).item()
-    # TODO: scale parameters shouldn't be stored as tensors
     scale_params = {k : v.item() for k, v in scale_params.items()}
 
 # Specify paths to low-resolution snapshot and where to save enhanced snapshot. 
