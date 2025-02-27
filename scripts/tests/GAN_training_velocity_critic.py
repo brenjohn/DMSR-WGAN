@@ -20,10 +20,10 @@ from torch.utils.data import DataLoader
 from dmsr.dmsr_gan import DMSRWGAN
 from dmsr.dmsr_gan import DMSRCritic
 from dmsr.dmsr_gan import DMSRGenerator
-from dmsr.dmsr_gan import DMSRDataset
 
-from swift_tools.data import load_numpy_dataset
-from swift_tools.data import generate_mock_data
+from dmsr.data_tools import DMSRDataset
+from dmsr.data_tools import load_numpy_dataset
+from dmsr.data_tools import generate_mock_data
 
 
 # Check if CUDA is available and set the device

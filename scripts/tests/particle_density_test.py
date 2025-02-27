@@ -14,10 +14,9 @@ import time
 import torch
 import matplotlib.pyplot as plt
 
-from swift_tools.data import load_numpy_dataset
+from dmsr.data_tools import load_numpy_dataset
 from dmsr.field_operations.conversion import displacements_to_positions
 from dmsr.field_operations.conversion import cic_density_field
-
 
 
 #%%

@@ -20,9 +20,9 @@ from torch.utils.data import DataLoader
 from dmsr.dmsr_gan import DMSRWGAN
 from dmsr.dmsr_gan import DMSRCritic
 from dmsr.dmsr_gan import DMSRGenerator
-from dmsr.dmsr_gan import DMSRDataset
 
-from swift_tools.data import load_numpy_dataset
+from dmsr.data_tools import DMSRDataset
+from dmsr.data_tools import load_numpy_dataset
 
 # Check if CUDA is available and set the device
 gpu_id = 0
@@ -81,10 +81,6 @@ batch_size = 4
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
-# TODO: The four below depends on scale factor. Maybe this should be read from
-# dataset somehow or metadata.
-lr_padding = 2
-
 # Split data into displacements and velocities.
 LR_disp = LR_data[:, :3, ...].float()
 LR_vel  = LR_data[:, 3:, ...].float()
@@ -125,11 +121,13 @@ HR_data[:, 3:, ...] /= noramalisation_params['hr_velocity_std']
 #=============================================================================#
 gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(
-    dataloader, batch_size, box_size / hr_position_std, lr_padding, scale_factor
+    dataloader, 
+    batch_size, 
+    box_size / hr_position_std
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./level_0_run/checkpoints/current_model/')
+# gan.load('./velocity_run/checkpoints/current_model/')
 
 
 #=============================================================================#
@@ -152,8 +150,7 @@ monitors = {
     
     'samples_monitor' : SamplesMonitor(
         generator, 
-        lr_sample, hr_sample, 
-        lr_box_size, hr_box_size, 
+        lr_sample, hr_sample,
         device,
         samples_dir = samples_dir
     ),
@@ -220,5 +217,5 @@ gan.set_monitor(monitor_manager)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 2 * 1024
+num_epochs = 1024
 gan.train(num_epochs)

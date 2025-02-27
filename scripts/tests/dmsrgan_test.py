@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from dmsr.dmsr_gan import DMSRWGAN
 from dmsr.dmsr_gan import DMSRDensityCritic
 from dmsr.dmsr_gan import DMSRGenerator
-from dmsr.dmsr_gan import DMSRDataset
+from dmsr.data_tools import DMSRDataset
 
 
 # Check if CUDA is available and set the device
@@ -71,7 +71,6 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_training/'
 batch_size = 2
 box_size = 1
 lr_padding = 1

@@ -13,8 +13,8 @@ sys.path.append("../..")
 import torch
 import matplotlib.pyplot as plt
 
-from swift_tools.data import load_numpy_dataset
-from dmsr.dmsr_gan import DMSRDataset
+from dmsr.data_tools import load_numpy_dataset
+from dmsr.data_tools import DMSRDataset
 from dmsr.field_operations.conversion import cic_density_field
 from dmsr.analysis import power_spectrum
 
