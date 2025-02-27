@@ -16,9 +16,9 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dmsr.dmsr_gan import DMSRWGAN
-from dmsr.dmsr_gan import DMSRDensityCritic
-from dmsr.dmsr_gan import DMSRGenerator
+from dmsr.wgan import DMSRWGAN
+from dmsr.wgan import DMSRDensityCritic
+from dmsr.wgan import DMSRGenerator
 from dmsr.data_tools import DMSRDataset
 
 

@@ -16,9 +16,9 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from dmsr.dmsr_gan import DMSRWGAN
-from dmsr.dmsr_gan import DMSRDensityCritic
-from dmsr.dmsr_gan import DMSRGenerator
+from dmsr.wgan import DMSRWGAN
+from dmsr.wgan import DMSRDensityCritic
+from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import DMSRDataset
 from dmsr.data_tools import load_numpy_dataset
@@ -117,9 +117,9 @@ gan.set_optimizer(optimizer_c, optimizer_g)
 #=============================================================================#
 #                               Monitor
 #=============================================================================#
-from dmsr.dmsr_gan import MonitorManager, LossMonitor
-from dmsr.dmsr_gan import SamplesMonitor, CheckpointMonitor
-from dmsr.dmsr_gan import UpscaleMonitor
+from dmsr.monitors import MonitorManager, LossMonitor
+from dmsr.monitors import SamplesMonitor, CheckpointMonitor
+from dmsr.monitors import UpscaleMonitor
 
 lr_sample = LR_data[2:3, ...].float()
 hr_sample = HR_data[2:3, ...].float()

@@ -13,7 +13,7 @@ import time
 import torch
 
 from torch import autograd
-from dmsr.dmsr_gan import DMSRDensityCritic
+from dmsr.wgan import DMSRDensityCritic
 
 
 batch_size = 3
