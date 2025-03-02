@@ -9,6 +9,7 @@ Created on Wed Jan 29 18:06:27 2025
 import torch
 import torch.nn as nn
 
+from .conv import DMSRConv
 from torch.nn.functional import interpolate
 from ..field_operations.resize import crop
 
@@ -48,38 +49,37 @@ class HBlock(nn.Module):
         prim_chan : number of channels of primary input
     """
 
-    def __init__(self, curr_chan, next_chan, prim_chan):
+    def __init__(self, curr_chan, next_chan, prim_chan, style_size=None):
         super().__init__()
 
-        self.conv_A = nn.Sequential(
-            nn.Conv3d(curr_chan + 1, next_chan, 3),
-            nn.PReLU()
-        )
+        self.conv_A = DMSRConv(curr_chan + 1, next_chan, 3, style_size)
+        self.relu_A = nn.PReLU()
         
-        self.conv_B = nn.Sequential(
-            nn.Conv3d(next_chan + 1, next_chan, 3),
-            nn.PReLU()
-        )
+        self.conv_B = DMSRConv(next_chan + 1, next_chan, 3, style_size)
+        self.relu_B = nn.PReLU()
 
         # Projection to xyz channels
-        self.proj = nn.Sequential(
-            nn.Conv3d(next_chan, prim_chan, 1),
-            nn.PReLU()
-        )
+        self.proj_conv = DMSRConv(next_chan, prim_chan, 1, style_size)
+        self.proj_relu = nn.PReLU()
 
 
-    def forward(self, x, y, noise):
+    def forward(self, x, y, noise, style=None):
         noise_A, noise_B = noise
         
         x = torch.cat([x, noise_A], dim=1)
         x = interpolate(x, scale_factor=2, mode='trilinear')
-        x = self.conv_A(x)
+        x = self.conv_A(x, style)
+        x = self.relu_A(x)
+        
         x = torch.cat([x, noise_B], dim=1)
-        x = self.conv_B(x)
+        x = self.conv_B(x, style)
+        x = self.relu_B(x)
 
         y = interpolate(y, scale_factor=2, mode='trilinear')
         y = crop(y, 2)
-        y = y + self.proj(x)
+        p = self.proj_conv(x, style)
+        p = self.proj_relu(p)
+        y = y + p
         
         return x, y
 
@@ -108,24 +108,26 @@ class ResidualBlock(nn.Module):
     odd sizes are rounded down by the downsampling method.
     """
     
-    def __init__(self, channels_curr, channels_next):
+    def __init__(self, channels_in, channels_out, style_size=None):
         super().__init__()
-        self.skip = nn.Conv3d(channels_curr, channels_next, 1)
-        self.convs = nn.Sequential(
-            nn.Conv3d(channels_curr, channels_curr, 3),
-            nn.PReLU(),
-            nn.Conv3d(channels_curr, channels_next, 3),
-            nn.PReLU(),
-        )
+        self.skip = DMSRConv(channels_in, channels_out, 1, style_size)
+        self.conv_A = DMSRConv(channels_in, channels_in, 3, style_size)
+        self.relu_A = nn.PReLU()
+        self.conv_B = DMSRConv(channels_in, channels_out, 3, style_size)
+        self.relu_B = nn.PReLU()
             
 
-    def forward(self, x):
+    def forward(self, x, style=None):
         # Skip connection
         y = x
-        y = self.skip(y)
+        y = self.skip(y, style)
         y = crop(y, 2)
         
-        x = self.convs(x)
+        x = self.conv_A(x, style)
+        x = self.relu_A(x)
+        x = self.conv_B(x, style)
+        x = self.relu_B(x)
+        
         x = x + y
         x = interpolate(x, scale_factor=0.5, mode='trilinear')
         return x

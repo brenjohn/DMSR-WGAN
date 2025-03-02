@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from torch import randn
 from ..field_operations.resize import crop
+from .conv import DMSRConv
 from .blocks import HBlock
 
 
@@ -25,6 +26,7 @@ class DMSRGenerator(nn.Module):
                  base_channels,
                  crop_size=0,
                  scale_factor=4,
+                 style_size=None,
                  **kwargs
         ):
         super().__init__()
@@ -33,6 +35,7 @@ class DMSRGenerator(nn.Module):
         self.base_channels  = base_channels
         self.scale_factor   = scale_factor
         self.crop_size      = crop_size
+        self.style_size     = style_size
         
         self.build_generator_components()
         self.compute_input_padding()
@@ -64,10 +67,12 @@ class DMSRGenerator(nn.Module):
                                      |
                                   (output)
         """
-        self.initial_block = nn.Sequential(
-            nn.Conv3d(self.input_channels, self.base_channels, 1),
-            nn.PReLU(),
+        style_size = self.style_size
+        
+        self.initial_conv = DMSRConv(
+            self.input_channels, self.base_channels, 1, style_size
         )
+        self.initial_relu = nn.PReLU()
         
         scale = 1
         curr_chan = self.base_channels
@@ -79,7 +84,7 @@ class DMSRGenerator(nn.Module):
         self.blocks = nn.ModuleList()
         while scale < self.scale_factor:
             self.blocks.append(
-                HBlock(curr_chan, next_chan, prim_chan)
+                HBlock(curr_chan, next_chan, prim_chan, style_size)
             )
             
             scale *= 2
@@ -110,11 +115,13 @@ class DMSRGenerator(nn.Module):
         self.padding = (self.grid_size - self.inner_region) // 2
 
 
-    def forward(self, x, z):
+    def forward(self, x, z, style=None):
         y = x
-        x = self.initial_block(x)
+        x = self.initial_conv(x, style)
+        x = self.initial_relu(x)
+        
         for block, noise in zip(self.blocks, z):
-            x, y = block(x, y, noise)
+            x, y = block(x, y, noise, style)
         
         if self.crop_size:
             y = crop(y, self.crop_size)

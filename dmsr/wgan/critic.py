@@ -11,6 +11,7 @@ This file defines the critic model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import concat, rand, autograd
+from .conv import DMSRConv
 from .blocks import ResidualBlock
 from ..field_operations.conversion import cic_density_field
 from ..field_operations.resize import pixel_unshuffle
@@ -29,15 +30,17 @@ class DMSRCritic(nn.Module):
             input_channels,
             base_channels,
             density_scale_factor = None,
+            style_size = None,
             **kwargs
         ):
         super().__init__()
         self.input_size = input_size
         self.input_channels = input_channels
         self.base_channels = base_channels
+        self.style_size = style_size
         self.build_critic_components()
         
-        if density_scale_factor:
+        if density_scale_factor is not None:
             self.density_scale = density_scale_factor
             self.density_size = density_scale_factor * input_size
             self.prepare_batch = self.prepare_batch_hr
@@ -93,33 +96,42 @@ class DMSRCritic(nn.Module):
                            (Critic score)            <---- Output
         """
         residual_layers = self.layer_channels_and_sizes()
+        style_size = self.style_size
         
-        self.initial_block = nn.Sequential(
-            nn.Conv3d(self.input_channels, self.base_channels, 1),
-            nn.PReLU(),
+        self.initial_conv = DMSRConv(
+            self.input_channels, self.base_channels, 1, style_size
         )
+        self.initial_relu = nn.PReLU()
 
         self.residual_blocks = nn.ModuleList()
         for channel_in, channel_out, size in residual_layers:
             self.residual_blocks.append(
-                ResidualBlock(channel_in, channel_out)
+                ResidualBlock(channel_in, channel_out, style_size)
             )
         
-        self.aggregate_block = nn.Sequential(
-            nn.Conv3d(channel_out, channel_out, 1),
-            nn.PReLU(),
-            nn.Conv3d(channel_out, 1, 1),
-            nn.AdaptiveAvgPool3d((1, 1, 1))
-        )
+        # Aggregation components.
+        self.agg_conv_1 = DMSRConv(channel_out, channel_out, 1, style_size)
+        self.agg_relu   = nn.PReLU()
+        self.agg_conv_2 = DMSRConv(channel_out, 1, 1, style_size)
+        self.agg_pool   = nn.AdaptiveAvgPool3d((1, 1, 1))
 
 
-    def forward(self, x):
+    def forward(self, x, style=None):
         """Forward pass of the critic.
         """
-        x = self.initial_block(x)
+        x = self.initial_conv(x, style)
+        x = self.initial_relu(x)
+        
         for block in self.residual_blocks:
-            x = block(x)
-        return self.aggregate_block(x).flatten()
+            x = block(x, style)
+        
+        # Aggregation
+        x = self.agg_conv_1(x, style)
+        x = self.agg_relu(x)
+        x = self.agg_conv_2(x, style)
+        x = self.agg_pool(x).flatten()
+        
+        return x
     
     
     def prepare_batch_lr_hr(self, hr_batch, lr_batch, box_size):
@@ -152,7 +164,8 @@ class DMSRCritic(nn.Module):
             self, 
             batch_size, 
             real_data, 
-            fake_data, 
+            fake_data,
+            style,
             device, 
             weight=10
         ):
@@ -164,7 +177,7 @@ class DMSRCritic(nn.Module):
         
         # Score the new data with the critic model and get its derivative.
         mixed_data.requires_grad_(True)
-        score = self.forward(mixed_data).sum()
+        score = self.forward(mixed_data, style).sum()
         grad, = autograd.grad(
             score,
             mixed_data,

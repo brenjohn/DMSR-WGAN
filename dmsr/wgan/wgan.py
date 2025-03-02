@@ -63,12 +63,12 @@ class DMSRWGAN:
         self.monitor.init_monitoring(num_epochs, len(self.data))
         
         for epoch in range(num_epochs):
-            for batch, (lr_batch, hr_batch) in enumerate(self.data):
-                losses = train_step(lr_batch, hr_batch)
+            for batch_num, batch in enumerate(self.data):
+                losses = train_step(*batch)
                 
                 # End of batch processing.
                 self.monitor.end_of_batch(
-                    epoch, batch, self.batch_counter, losses
+                    epoch, batch_num, self.batch_counter, losses
                 )
                 self.batch_counter += 1
                     
@@ -80,14 +80,14 @@ class DMSRWGAN:
     #                        Supervised learning
     #=========================================================================#
                 
-    def generator_supervised_step(self, lr_batch, hr_batch):
+    def generator_supervised_step(self, lr_batch, hr_batch, style=None):
         # Move data to the device.
         lr_batch = lr_batch.to(self.device)
         hr_batch = hr_batch.to(self.device)
         
         # Use the generator to create fake data.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
-        sr_batch = self.generator(lr_batch, z)
+        sr_batch = self.generator(lr_batch, z, style)
         
         # Compute the loss and update the generator parameters.
         self.optimizer_g.zero_grad()
@@ -99,7 +99,7 @@ class DMSRWGAN:
         return losses
     
     
-    def critic_supervised_step(self, lr_batch, hr_batch):
+    def critic_supervised_step(self, lr_batch, hr_batch, style=None):
         # Move data to the device.
         lr_batch = lr_batch.to(self.device)
         hr_batch = hr_batch.to(self.device)
@@ -111,7 +111,7 @@ class DMSRWGAN:
         ).detach()
         
         # Compute the loss and update the generator parameters.
-        losses = self.critic_train_step(lr_batch, hr_batch, us_batch)
+        losses = self.critic_train_step(lr_batch, hr_batch, us_batch, style)
         return losses
         
         
@@ -119,7 +119,7 @@ class DMSRWGAN:
     #                           WGAN learning
     #=========================================================================#
             
-    def train_step(self, lr_batch, hr_batch):
+    def train_step(self, lr_batch, hr_batch, style=None):
         """Train step for the WGAN.
         """
         # Move data to the device.
@@ -133,19 +133,23 @@ class DMSRWGAN:
         ).detach()
         
         # Train the critic and generator models.
-        critic_losses = self.critic_train_step(lr_batch, hr_batch, us_batch)
-        generator_losses = self.generator_train_step(lr_batch, us_batch)
+        critic_losses = self.critic_train_step(
+            lr_batch, hr_batch, us_batch, style
+        )
+        generator_losses = self.generator_train_step(
+            lr_batch, us_batch, style
+        )
         return critic_losses | generator_losses
     
     
-    def critic_train_step(self, lr_batch, hr_batch, us_batch):
+    def critic_train_step(self, lr_batch, hr_batch, us_batch, style=None):
         """Train step for the critic.
         """
         self.optimizer_c.zero_grad()
         
         # Create fake data using the generator.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
-        sr_batch = self.generator(lr_batch, z)
+        sr_batch = self.generator(lr_batch, z, style)
         fake_data = self.critic.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
@@ -158,15 +162,15 @@ class DMSRWGAN:
         real_data = tuple(tensor.detach() for tensor in real_data)
         
         # Use the critic to score the real and fake data and compute the loss.
-        real_scores = self.critic(*real_data)
-        fake_scores = self.critic(*fake_data)
+        real_scores = self.critic(*real_data, style)
+        fake_scores = self.critic(*fake_data, style)
         critic_loss = fake_scores.mean() - real_scores.mean()
         losses = {'critic_loss' : critic_loss.item()}
         
         # Add the gradient penalty term to the loss.
         if self.batch_counter % self.gradient_penalty_rate == 0:
             gradient_penalty = self.critic.gradient_penalty(
-                self.batch_size, *real_data, *fake_data, self.device
+                self.batch_size, *real_data, *fake_data, style, self.device
             )
             losses['gradient_penalty'] = gradient_penalty.item()
         else:
@@ -181,20 +185,20 @@ class DMSRWGAN:
         return losses
     
     
-    def generator_train_step(self, lr_batch, us_batch):
+    def generator_train_step(self, lr_batch, us_batch, style=None):
         """Train step for the generator.
         """
         self.optimizer_g.zero_grad()
         
         # Use the generator to create fake data.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
-        sr_batch = self.generator(lr_batch, z)
+        sr_batch = self.generator(lr_batch, z, style)
         fake_data = self.critic.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
         
         # Use the critic to score the generated data.
-        fake_scores = self.critic(*fake_data)
+        fake_scores = self.critic(*fake_data, style)
         generator_loss = -fake_scores.mean()
         
         # Update the generator parameters.

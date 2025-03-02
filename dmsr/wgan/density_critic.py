@@ -14,6 +14,7 @@ import torch.nn as nn
 
 from torch import concat, rand, autograd
 from ..field_operations.conversion import cic_density_field
+from .conv import DMSRConv
 from .blocks import ResidualBlock
 
 
@@ -28,6 +29,7 @@ class DMSRDensityCritic(nn.Module):
             displacement_size,
             density_channels,
             main_channels,
+            style_size = None,
             **kwargs
         ):
         super().__init__()
@@ -35,6 +37,7 @@ class DMSRDensityCritic(nn.Module):
         self.displacement_size = displacement_size
         self.density_channels = density_channels
         self.main_channels = main_channels
+        self.style_size = style_size
         self.build_critic_components()
         
         
@@ -116,54 +119,61 @@ class DMSRDensityCritic(nn.Module):
                                  |
                            (Critic score)            <---- Output
         """
+        style_size = self.style_size
         density_layers, main_layers = self.layer_channels_and_sizes()
         
-        self.density_initial_block = nn.Sequential(
-            nn.Conv3d(2, self.density_channels, 1),
-            nn.PReLU(),
+        self.density_initial_conv = DMSRConv(
+            2, self.density_channels, 1, style_size
         )
+        self.density_initial_relu = nn.PReLU()
         
         # Note: channel_out = density_channels if density_channels is empty.
         channel_out = self.density_channels
         self.density_blocks = nn.ModuleList()
         for channel_in, channel_out, size in density_layers:
             self.density_blocks.append(
-                ResidualBlock(channel_in, channel_out)
+                ResidualBlock(channel_in, channel_out, style_size)
             )
         
-        self.main_initial_block = nn.Sequential(
-            nn.Conv3d(6 + channel_out, self.main_channels, 1),
-            nn.PReLU(),
+        self.main_initial_conv = DMSRConv(
+            6 + channel_out, self.main_channels, 1, style_size
         )
+        self.main_initial_relu = nn.PReLU()
 
         self.main_blocks = nn.ModuleList()
         for channel_in, channel_out, size in main_layers:
             self.main_blocks.append(
-                ResidualBlock(channel_in, channel_out)
+                ResidualBlock(channel_in, channel_out, style_size)
             )
         
-        self.aggregate_block = nn.Sequential(
-            nn.Conv3d(channel_out, channel_out, 1),
-            nn.PReLU(),
-            nn.Conv3d(channel_out, 1, 1),
-            nn.AdaptiveAvgPool3d((1, 1, 1))
-        )
+        # Aggregation components.
+        self.agg_conv_1 = DMSRConv(channel_out, channel_out, 1, style_size)
+        self.agg_relu   = nn.PReLU()
+        self.agg_conv_2 = DMSRConv(channel_out, 1, 1, style_size)
+        self.agg_pool   = nn.AdaptiveAvgPool3d((1, 1, 1))
 
 
-    def forward(self, displacements, densities):
+    def forward(self, displacements, densities, style=None):
         """Forward pass of the critic.
         """
-        
-        y = self.density_initial_block(densities)
+        y = self.density_initial_conv(densities, style)
+        y = self.density_initial_relu(y)
         for block in self.density_blocks:
-            y = block(y)
+            y = block(y, style)
         
         x = torch.cat([displacements, y], dim=1)
-        x = self.main_initial_block(x)
+        x = self.main_initial_conv(x, style)
+        x = self.main_initial_relu(x)
         for block in self.main_blocks:
-            x = block(x)
+            x = block(x, style)
+            
+        # Aggregation
+        x = self.agg_conv_1(x, style)
+        x = self.agg_relu(x)
+        x = self.agg_conv_2(x, style)
+        x = self.agg_pool(x).flatten()
 
-        return self.aggregate_block(x).flatten()
+        return x
     
     
     def prepare_batch(self, hr_batch, lr_batch, box_size):
@@ -184,6 +194,7 @@ class DMSRDensityCritic(nn.Module):
             real_density,
             fake_displacements,
             fake_density,
+            style,
             device, 
             weight=10
         ):
@@ -198,7 +209,9 @@ class DMSRDensityCritic(nn.Module):
         
         # Score the new data with the critic model and get its derivative.
         score = self.forward(
-            displacements.requires_grad_(True), density.requires_grad_(True)
+            displacements.requires_grad_(True), 
+            density.requires_grad_(True),
+            style
         )
         score = score.sum()
         displacement_grad, density_grad = autograd.grad(
