@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from torch import concat, rand, autograd
 from ..field_operations.conversion import cic_density_field
-from .conv import DMSRConv
+from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 
 
@@ -119,11 +119,11 @@ class DMSRDensityCritic(nn.Module):
                                  |
                            (Critic score)            <---- Output
         """
-        style_size = self.style_size
         density_layers, main_layers = self.layer_channels_and_sizes()
+        Conv = DMSRStyleConv if self.style_size is not None else DMSRConv
         
-        self.density_initial_conv = DMSRConv(
-            2, self.density_channels, 1, style_size
+        self.density_initial_conv = Conv(
+            2, self.density_channels, 1, self.style_size
         )
         self.density_initial_relu = nn.PReLU()
         
@@ -132,24 +132,24 @@ class DMSRDensityCritic(nn.Module):
         self.density_blocks = nn.ModuleList()
         for channel_in, channel_out, size in density_layers:
             self.density_blocks.append(
-                ResidualBlock(channel_in, channel_out, style_size)
+                ResidualBlock(channel_in, channel_out, self.style_size)
             )
         
-        self.main_initial_conv = DMSRConv(
-            6 + channel_out, self.main_channels, 1, style_size
+        self.main_initial_conv = Conv(
+            6 + channel_out, self.main_channels, 1, self.style_size
         )
         self.main_initial_relu = nn.PReLU()
 
         self.main_blocks = nn.ModuleList()
         for channel_in, channel_out, size in main_layers:
             self.main_blocks.append(
-                ResidualBlock(channel_in, channel_out, style_size)
+                ResidualBlock(channel_in, channel_out, self.style_size)
             )
         
         # Aggregation components.
-        self.agg_conv_1 = DMSRConv(channel_out, channel_out, 1, style_size)
+        self.agg_conv_1 = Conv(channel_out, channel_out, 1, self.style_size)
         self.agg_relu   = nn.PReLU()
-        self.agg_conv_2 = DMSRConv(channel_out, 1, 1, style_size)
+        self.agg_conv_2 = Conv(channel_out, 1, 1, self.style_size)
         self.agg_pool   = nn.AdaptiveAvgPool3d((1, 1, 1))
 
 

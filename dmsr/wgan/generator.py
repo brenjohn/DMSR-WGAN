@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from torch import randn
 from ..field_operations.resize import crop
-from .conv import DMSRConv
+from .conv import DMSRConv, DMSRStyleConv
 from .blocks import HBlock
 
 
@@ -67,10 +67,10 @@ class DMSRGenerator(nn.Module):
                                      |
                                   (output)
         """
-        style_size = self.style_size
+        Conv = DMSRStyleConv if self.style_size is not None else DMSRConv
         
-        self.initial_conv = DMSRConv(
-            self.input_channels, self.base_channels, 1, style_size
+        self.initial_conv = Conv(
+            self.input_channels, self.base_channels, 1, self.style_size
         )
         self.initial_relu = nn.PReLU()
         
@@ -84,7 +84,7 @@ class DMSRGenerator(nn.Module):
         self.blocks = nn.ModuleList()
         while scale < self.scale_factor:
             self.blocks.append(
-                HBlock(curr_chan, next_chan, prim_chan, style_size)
+                HBlock(curr_chan, next_chan, prim_chan, self.style_size)
             )
             
             scale *= 2

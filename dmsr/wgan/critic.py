@@ -11,7 +11,7 @@ This file defines the critic model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import concat, rand, autograd
-from .conv import DMSRConv
+from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 from ..field_operations.conversion import cic_density_field
 from ..field_operations.resize import pixel_unshuffle
@@ -96,23 +96,23 @@ class DMSRCritic(nn.Module):
                            (Critic score)            <---- Output
         """
         residual_layers = self.layer_channels_and_sizes()
-        style_size = self.style_size
+        Conv = DMSRStyleConv if self.style_size is not None else DMSRConv
         
-        self.initial_conv = DMSRConv(
-            self.input_channels, self.base_channels, 1, style_size
+        self.initial_conv = Conv(
+            self.input_channels, self.base_channels, 1, self.style_size
         )
         self.initial_relu = nn.PReLU()
 
         self.residual_blocks = nn.ModuleList()
         for channel_in, channel_out, size in residual_layers:
             self.residual_blocks.append(
-                ResidualBlock(channel_in, channel_out, style_size)
+                ResidualBlock(channel_in, channel_out, self.style_size)
             )
         
         # Aggregation components.
-        self.agg_conv_1 = DMSRConv(channel_out, channel_out, 1, style_size)
+        self.agg_conv_1 = Conv(channel_out, channel_out, 1, self.style_size)
         self.agg_relu   = nn.PReLU()
-        self.agg_conv_2 = DMSRConv(channel_out, 1, 1, style_size)
+        self.agg_conv_2 = Conv(channel_out, 1, 1, self.style_size)
         self.agg_pool   = nn.AdaptiveAvgPool3d((1, 1, 1))
 
 

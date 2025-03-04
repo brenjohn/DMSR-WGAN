@@ -14,7 +14,7 @@ from torch.nn import init
 from torch.nn.functional import conv3d
 
 
-class DMSRConv(nn.Module):
+class DMSRStyleConv(nn.Module):
     """Convolution layer with modulation and demodulation as described in
     Karras et al. 2020 "Analyzing and improving the image quality of styleGAN.
     """
@@ -24,7 +24,7 @@ class DMSRConv(nn.Module):
             channels_in,
             channels_out,
             kernel_size,
-            style_size=None
+            style_size
         ):
         super().__init__()
         
@@ -32,20 +32,20 @@ class DMSRConv(nn.Module):
         self.channels_out = channels_out
         self.kernel_size  = (kernel_size,) * 3
         self.style_size   = style_size
+        self.eps          = 1e-8
         
-        # Convolution parameters
+        # Convolution parameters.
         self.weight = nn.Parameter(
             torch.empty(channels_out, channels_in, *self.kernel_size)
         )
-        self.bias = nn.Parameter(torch.zeros(channels_out))
-        self.eps = 1e-8
+        self.bias = nn.Parameter(
+            torch.zeros(channels_out)
+        ).view(1, -1, 1, 1, 1)
         
-        # Style modulation block (if applicable)
-        self.style_block = None
-        if style_size:
-            self.style_block = nn.Linear(
-                in_features=style_size, out_features=channels_in
-            )
+        # Style modulation block.
+        self.style_block = nn.Linear(
+            in_features=style_size, out_features=channels_in
+        )
         
         # Initialize parameters.
         self._initialize_parameters()
@@ -61,15 +61,84 @@ class DMSRConv(nn.Module):
     
     
     def forward(self, x, style=None):
+        """
+        Perform a modulated 3D convolution with optional style conditioning.
+
+        If a style tensor is provided, each sample in the batch modulates the 
+        convolution weights, followed by a demodulation step. The convolution 
+        is then performed using group convolution.
+        
+        A styled-convolution on batched data requires applying a differently
+        styled convolutional kernel to each sample in the batch (since each
+        sample comes with its own style parameter). However, the standard
+        convolution applies the same kernel to all samples in a batch. To
+        circumvent this, the batch and channel dimensions of the weight and 
+        input tensors are merged and a grouped convolution is used. 
+        
+        More specifically, to merge the batch and channel dimensions, the 
+        channel dimensions for each batch are stacked to transform batched 
+        tensors of shape (batch_size, channels, ...) to a tensor holding a 
+        single batch sample with shape (1, batch_size * channels, ...). Then,
+        a grouped convolutional operation is used, with groups=batch_size, to
+        apply independent convolutions, each with distinctly styled kernels,
+        to each sample in the batch. Finally, the channels of the grouped 
+        convolution output is unstacked to change its from shape
+        (1, batch_size * channels_out, ...) to (batch_size, channels_out, ...). 
+        """
+        batch_size, channels_in, grid_size, _, _ = x.shape
         weight = self.weight
         
-        if style is not None:
-            # Weight modulation and demodulation.
-            scale = self.style_block(style).view(-1, self.channels_in, 1, 1, 1)
-            weight = weight * scale
-            variance = weight.pow(2).sum(dim=(1, 2, 3, 4), keepdim=True)
-            weight = weight * torch.rsqrt(variance + self.eps)
+        # Use the style block to transform the batch of style parameters into a
+        # tensor of scales for modulating the weights. The scale tensor should
+        # have shape (batch_size, 1, channels_in, 1, 1, 1).
+        style_scale = self.style_block(style)
+        style_scale = style_scale.view(batch_size, 1, channels_in, 1, 1, 1)
         
-        x = conv3d(x, weight, bias=self.bias, stride=1, padding=0)
+        # Modulate the weights, with the above scales, and give them shape 
+        # (batch_size, channels_out, channels_in, size, size, size)
+        weight = weight.unsqueeze(0) * style_scale
         
-        return x
+        # Demodulate the weigths by normalising them.
+        variance = weight.pow(2).sum(dim=(2, 3, 4, 5), keepdim=True)
+        demodulation_factor = torch.rsqrt(variance + self.eps)
+        weight = weight * demodulation_factor
+        
+        # Reshape weights and input for group convolution by merging batch and
+        # input channels.
+        weight = weight.view(
+            batch_size * self.channels_out, channels_in, *self.kernel_size
+        )
+        x = x.view(
+            1, batch_size * channels_in, grid_size, grid_size, grid_size
+        )
+        
+        # Apply group convolution.
+        x = conv3d(
+            x, weight, bias=None, stride=1, padding=0, groups=batch_size
+        )
+        
+        # Unmerge batch and output channels before returning
+        new_size = x.shape[-1]
+        x = x.view(batch_size, self.channels_out, new_size, new_size, new_size)
+        return x + self.bias
+    
+    
+
+class DMSRConv(nn.Module):
+    """Wrapper class for a standard Conv3d which accepts and ignores a style
+    parameter in the constructor and forward method.
+    """
+
+    def __init__(
+            self,
+            channels_in,
+            channels_out,
+            kernel_size,
+            *args
+        ):
+        super().__init__()
+        self.conv = nn.Conv3d(channels_in, channels_out, kernel_size)
+    
+    
+    def forward(self, x, style=None):
+        return self.conv(x)

@@ -9,7 +9,7 @@ Created on Wed Jan 29 18:06:27 2025
 import torch
 import torch.nn as nn
 
-from .conv import DMSRConv
+from .conv import DMSRConv, DMSRStyleConv
 from torch.nn.functional import interpolate
 from ..field_operations.resize import crop
 
@@ -51,15 +51,16 @@ class HBlock(nn.Module):
 
     def __init__(self, curr_chan, next_chan, prim_chan, style_size=None):
         super().__init__()
+        Conv = DMSRStyleConv if style_size is not None else DMSRConv
 
-        self.conv_A = DMSRConv(curr_chan + 1, next_chan, 3, style_size)
+        self.conv_A = Conv(curr_chan + 1, next_chan, 3, style_size)
         self.relu_A = nn.PReLU()
         
-        self.conv_B = DMSRConv(next_chan + 1, next_chan, 3, style_size)
+        self.conv_B = Conv(next_chan + 1, next_chan, 3, style_size)
         self.relu_B = nn.PReLU()
 
         # Projection to xyz channels
-        self.proj_conv = DMSRConv(next_chan, prim_chan, 1, style_size)
+        self.proj_conv = Conv(next_chan, prim_chan, 1, style_size)
         self.proj_relu = nn.PReLU()
 
 
@@ -110,10 +111,12 @@ class ResidualBlock(nn.Module):
     
     def __init__(self, channels_in, channels_out, style_size=None):
         super().__init__()
-        self.skip = DMSRConv(channels_in, channels_out, 1, style_size)
-        self.conv_A = DMSRConv(channels_in, channels_in, 3, style_size)
+        Conv = DMSRStyleConv if style_size is not None else DMSRConv
+        
+        self.skip   = Conv(channels_in, channels_out, 1, style_size)
+        self.conv_A = Conv(channels_in, channels_in, 3, style_size)
         self.relu_A = nn.PReLU()
-        self.conv_B = DMSRConv(channels_in, channels_out, 3, style_size)
+        self.conv_B = Conv(channels_in, channels_out, 3, style_size)
         self.relu_B = nn.PReLU()
             
 
