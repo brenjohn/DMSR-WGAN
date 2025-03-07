@@ -49,9 +49,8 @@ def load_normalisation_parameters(param_file):
 def generate_mock_data(lr_grid_size, hr_grid_size, channels, samples):
     """Create a mock training data set for testing.
     """
-    box_size = 1
     shape = (samples, channels, lr_grid_size, lr_grid_size, lr_grid_size)
     LR_data = torch.rand(*shape)
     shape = (samples, channels, hr_grid_size, hr_grid_size, hr_grid_size)
     HR_data = torch.rand(*shape)
-    return LR_data, HR_data, box_size, lr_grid_size, hr_grid_size
+    return LR_data, HR_data

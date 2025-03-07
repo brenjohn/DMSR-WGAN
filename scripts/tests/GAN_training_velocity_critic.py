@@ -83,7 +83,8 @@ lr_padding = generator.padding
 # data_directory = '../../data/dmsr_training/'
 # data = load_numpy_dataset(data_directory)
 data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+LR_data, HR_data = data
+box_size = 1
 
 # Split data into displacements and velocities.
 LR_disp = LR_data[:, :3, ...].float()
@@ -113,7 +114,7 @@ hr_position_std = noramalisation_params['hr_position_std']
 # data = load_numpy_dataset(data_directory)
 
 data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+LR_data, HR_data = data
 
 LR_data[:, :3, ...] /= noramalisation_params['lr_position_std']
 LR_data[:, 3:, ...] /= noramalisation_params['lr_velocity_std']
@@ -176,7 +177,7 @@ upscaling_monitor = UpscaleMonitor(
 
 
 particle_mass = 1
-grid_size = int(HR_grid_size)
+grid_size = int(hr_grid_size)
 upscaling_monitor.set_data_set(
     LR_data.float(), 
     HR_data.float(), 

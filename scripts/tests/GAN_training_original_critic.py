@@ -82,7 +82,8 @@ lr_padding = generator.padding
 # data_directory = 'path/to/training/data/directory'
 # data = load_numpy_dataset(data_directory)
 data = generate_mock_data(lr_grid_size, hr_grid_size, channels=3, samples=4)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+LR_data, HR_data = data
+box_size = 1
 
 dataset = DMSRDataset(
     LR_data.float(), HR_data.float(), augment=True
@@ -100,7 +101,7 @@ dataloader = DataLoader(
 # data = load_numpy_dataset(data_directory)
 
 data = generate_mock_data(lr_grid_size, hr_grid_size, channels=3, samples=8)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+LR_data, HR_data = data
 
 
 #=============================================================================#
@@ -154,7 +155,7 @@ upscaling_monitor = UpscaleMonitor(
 
 
 particle_mass = 1
-grid_size = int(HR_grid_size)
+grid_size = int(hr_grid_size)
 upscaling_monitor.set_data_set(
     LR_data.float(), 
     HR_data.float(), 

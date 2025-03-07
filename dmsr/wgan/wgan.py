@@ -57,7 +57,7 @@ class DMSRWGAN:
     def train(self, num_epochs, train_step=None):
         """Train the DMSR-WGAN for the given number of epochs.
         """
-        if not train_step:
+        if train_step is None:
             train_step = self.train_step
         
         self.monitor.init_monitoring(num_epochs, len(self.data))
@@ -237,11 +237,11 @@ class DMSRWGAN:
         save(attributes, model_dir + 'attributes.pth')
         
         
-    def load(self, checkpoint_dir):
+    def load(self, model_dir):
         """Load a saved model
         """
-        self.critic = load(checkpoint_dir + 'critic.pth')
-        self.generator = load(checkpoint_dir + 'generator.pth')
+        self.critic = load(model_dir + 'critic.pth', weights_only=False)
+        self.generator = load(model_dir + 'generator.pth', weights_only=False)
         
         # Here we create new instances of the optimizers to update the weights
         # of the new models just created.
@@ -252,10 +252,10 @@ class DMSRWGAN:
         self.optimizer_g = optimizer_type(self.generator.parameters())
         
         # Now load the saved state of the optimizers.
-        optimizer_states = load(checkpoint_dir + 'optimizers.pth')
-        self.optimizer_c.load_state_dict(optimizer_states['optimizer_c'])
-        self.optimizer_g.load_state_dict(optimizer_states['optimizer_g'])
+        optimizers = load(model_dir + 'optimizers.pth', weights_only=False)
+        self.optimizer_c.load_state_dict(optimizers['optimizer_c'])
+        self.optimizer_g.load_state_dict(optimizers['optimizer_g'])
         
         # Load any additional attributes that were saved.
-        attributes = load(checkpoint_dir + 'attributes.pth')
+        attributes = load(model_dir + 'attributes.pth', weights_only=False)
         vars(self).update(attributes)

@@ -150,11 +150,13 @@ class SamplesMonitor(BaseMonitor):
             lr_sample, 
             hr_sample,
             device,
+            style = None,
             samples_dir = './data/samples/'
         ):
         
         self.lr_sample = lr_sample
         self.hr_sample = hr_sample
+        self.style = style
         
         self.device = device
         self.generator = generator
@@ -174,7 +176,7 @@ class SamplesMonitor(BaseMonitor):
         # Move data to the device and use the generator to create fake data.
         lr_sample = self.lr_sample.to(self.device)
         z = [(z0.to(self.device), z1.to(self.device)) for z0, z1 in self.z]
-        sr_sample = self.generator(lr_sample, z)
+        sr_sample = self.generator(lr_sample, z, self.style)
         
         # Move the fake data to the cpu and save.
         sr_sample = sr_sample.detach().cpu()
@@ -214,10 +216,11 @@ class UpscaleMonitor(BaseMonitor):
     def set_data_set(
             self, 
             lr_data, 
-            hr_data, 
+            hr_data,
             particle_mass, 
             box_size, 
-            grid_size
+            grid_size,
+            style = None
         ):
         """Set the dataset to be used for computing the uniform metric.
         """
@@ -225,6 +228,7 @@ class UpscaleMonitor(BaseMonitor):
         self.mass       = particle_mass
         self.box_size   = box_size
         self.grid_size  = grid_size
+        self.style      = style
         self.hr_spectra = self.get_spectra(hr_data)
         
         
@@ -260,7 +264,7 @@ class UpscaleMonitor(BaseMonitor):
             
             # Generate fake super resolution data with the current generator.
             z = self.generator.sample_latent_space(1, self.device)
-            sr_sample = self.generator(lr_sample, z)
+            sr_sample = self.generator(lr_sample, z, self.style)
             sr_sample = sr_sample.detach()
             
             # Get the power spectrum of the fake data.

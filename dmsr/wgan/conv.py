@@ -39,8 +39,8 @@ class DMSRStyleConv(nn.Module):
             torch.empty(channels_out, channels_in, *self.kernel_size)
         )
         self.bias = nn.Parameter(
-            torch.zeros(channels_out)
-        ).view(1, -1, 1, 1, 1)
+            torch.zeros(1, channels_out, 1, 1, 1)
+        )
         
         # Style modulation block.
         self.style_block = nn.Linear(

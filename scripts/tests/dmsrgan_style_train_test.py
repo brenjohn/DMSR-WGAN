@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Sep 10 14:14:03 2024
+Created on Thu Mar  6 18:04:40 2025
 
 @author: brennan
 """
@@ -17,7 +17,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from dmsr.wgan import DMSRWGAN
-from dmsr.wgan import DMSRDensityCritic
+from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 from dmsr.data_tools import DMSRDataset
 
@@ -37,19 +37,23 @@ input_channels = 3
 base_channels  = 3
 crop_size      = 2
 scale_factor   = 2
+style_size     = 1
 
 generator = DMSRGenerator(
-    LR_grid_size, input_channels, base_channels, crop_size, scale_factor
+    LR_grid_size, 
+    input_channels, 
+    base_channels, 
+    crop_size, 
+    scale_factor, 
+    style_size
 )
 
-hr_grid_size      = generator.output_size
-density_size      = 2 * hr_grid_size + 4
-displacement_size = hr_grid_size
-density_channels  = 4
-main_channels     = 8
+HR_grid_size  = generator.output_size
+input_channels = 8
+base_channels = 16
 
-critic = DMSRDensityCritic(
-    density_size, displacement_size, density_channels, main_channels
+critic = DMSRCritic(
+    HR_grid_size, input_channels, base_channels, style_size=style_size
 )
 
 generator.to(device)
@@ -77,11 +81,13 @@ box_size = 1
 lr_padding = 1
 
 lr_data, hr_data = generate_mock_data(
-    LR_grid_size, hr_grid_size, 3, batch_size
+    LR_grid_size, HR_grid_size, 3, batch_size
 )
 
+scale_factors = torch.randn((batch_size, style_size)).to(device)
+
 dataset = DMSRDataset(
-    lr_data, hr_data, augment=True
+    lr_data, hr_data, scale_factor=scale_factors, augment=True
 )
 
 dataloader = DataLoader(
@@ -99,7 +105,7 @@ gan.set_optimizer(optimizer_c, optimizer_g)
 
 #%%
 ti = time.time()
-gan.train_step(lr_data, hr_data)
+gan.train_step(lr_data, hr_data, scale_factors)
 time_train_step = time.time() - ti
 print('train step took :', time_train_step)
 

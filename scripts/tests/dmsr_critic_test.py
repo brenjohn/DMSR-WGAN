@@ -38,6 +38,7 @@ dens = torch.randn(
 
 style = torch.randn((batch_size, 1))
 
+
 #%% Critic Model
 critic = DMSRCritic(
     input_size, input_channels, base_channels, 2

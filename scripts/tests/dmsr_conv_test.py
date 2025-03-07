@@ -15,7 +15,7 @@ import torch
 from dmsr.wgan import DMSRStyleConv, DMSRConv
 from dmsr.data_tools import generate_mock_data
 
-x, _, _, _, _ = generate_mock_data(20, 32, 3, 2)
+x, _, = generate_mock_data(20, 32, 3, 2)
 
 channels_in  = 3 
 channels_out = 4

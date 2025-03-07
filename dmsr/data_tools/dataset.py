@@ -23,16 +23,21 @@ class DMSRDataset(Dataset):
             self, 
             lr_position, 
             hr_position,
-            lr_velocity = None,
-            hr_velocity = None,
-            augment     = True
+            lr_velocity  = None,
+            hr_velocity  = None,
+            scale_factor = None,
+            augment      = True
         ):
-        self.lr_position = lr_position
-        self.hr_position = hr_position
-        self.lr_velocity = lr_velocity
-        self.hr_velocity = hr_velocity
-        self.velocities_included = not lr_velocity is None
-        self.augment = augment
+        self.lr_position  = lr_position
+        self.hr_position  = hr_position
+        self.lr_velocity  = lr_velocity
+        self.hr_velocity  = hr_velocity
+        self.scale_factor = scale_factor
+        self.augment      = augment
+        
+        self.velocities_included = lr_velocity is not None
+        self.scale_factors_included = scale_factor is not None
+        
         
     
     def __len__(self):
@@ -59,6 +64,10 @@ class DMSRDataset(Dataset):
             
             lr_data = torch.concat((lr_data, lr_velocity))
             hr_data = torch.concat((hr_data, hr_velocity))
+          
+        if self.scale_factors_included:
+            style = self.scale_factor[idx]
+            return lr_data, hr_data, style
         
         return lr_data, hr_data
     

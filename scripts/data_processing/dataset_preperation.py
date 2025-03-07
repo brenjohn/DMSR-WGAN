@@ -6,6 +6,7 @@ Created on Mon Jul 22 19:02:21 2024
 @author: brennan
 """
 
+import os
 import sys
 sys.path.append("..")
 sys.path.append("../..")
@@ -24,12 +25,17 @@ data_directory = '../../data/dmsr_runs/'
 # HR_snapshots = np.sort(glob.glob(data_directory + '*/256/snap_0002.hdf5'))[:16]
 
 LR_snapshots = np.sort(glob.glob(data_directory + 'run17/064/snap_0002.hdf5'))
-HR_snapshots = np.sort(glob.glob(data_directory + 'run17/256/snap_0002.hdf5'))
+HR_snapshots = np.sort(glob.glob(data_directory + 'run17/128/snap_0002.hdf5'))
+number_of_snapshots = len(LR_snapshots)
 
 
 #%%
-LR_disp, LR_vel, box_size, LR_grid_size, LR_mass = read_snapshots(LR_snapshots)
-HR_disp, HR_vel, box_size, HR_grid_size, HR_mass = read_snapshots(HR_snapshots)
+LR_disp, LR_vel, a_factors, box_size, LR_grid_size, LR_mass = read_snapshots(
+    LR_snapshots
+)
+HR_disp, HR_vel, a_factors, box_size, HR_grid_size, HR_mass = read_snapshots(
+    HR_snapshots
+)
 
 LR_fields = np.concatenate((LR_disp, LR_vel), axis=1)
 del LR_disp
@@ -48,23 +54,30 @@ del HR_vel
 #%%
 padding = 2
 LR_patch_size = 16
-HR_patch_size = 64
+HR_patch_size = 32
 
 LR_fields = cut_field(LR_fields, LR_patch_size, LR_patch_size, pad=padding)
 HR_fields = cut_field(HR_fields, HR_patch_size, HR_patch_size)
 
+patches_per_snapshot = LR_fields.shape[0] // number_of_snapshots
+a_factors = np.repeat(a_factors, patches_per_snapshot)
+
 
 #%%
-# LR_file = '../../data/dmsr_training/LR_fields.npy'
-LR_file = '../../data/dmsr_validation/LR_fields.npy'
+# output_dir = '../../data/dmsr_training/'
+output_dir = '../../data/dmsr_style_test/'
+os.makedirs(output_dir, exist_ok=True)
+
+LR_file = output_dir + 'LR_fields.npy'
 np.save(LR_file, LR_fields)
 
-# HR_file = '../../data/dmsr_training/HR_fields.npy'
-HR_file = '../../data/dmsr_validation/HR_fields.npy'
+HR_file = output_dir + 'HR_fields.npy'
 np.save(HR_file, HR_fields)
 
-# meta_file = '../../data/dmsr_training/metadata.npy'
-meta_file = '../../data/dmsr_validation/metadata.npy'
+scale_factor_file = output_dir + 'scale_factors.npy'
+np.save(scale_factor_file, a_factors)
+
+meta_file = output_dir + 'metadata.npy'
 LR_size = LR_patch_size + 2 * padding
 HR_size = HR_patch_size
 np.save(meta_file, [

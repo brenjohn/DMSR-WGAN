@@ -15,8 +15,8 @@ from .fields import get_displacement_field, get_velocity_field
 
 
 def read_snapshot(snapshot):
-    """Reads the positions, grid_size, box_size, h and particle mass from the 
-    given snapshot.
+    """Reads the positions, grid_size, box_size, h, particle mass and scale 
+    factor from the given snapshot.
     """
     file       = h5.File(snapshot, 'r')
     h          = file['Cosmology'].attrs['h'][0]
@@ -27,20 +27,23 @@ def read_snapshot(snapshot):
     positions  = np.asarray(dm_data['Coordinates'])
     velocities = np.asarray(dm_data['Velocities'])
     mass       = np.asarray(dm_data['Masses'])[0]
+    a          = file['Cosmology'].attrs['Scale-factor']
     file.close()
-    return IDs, positions, velocities, grid_size, box_size, h, mass
+    return IDs, positions, velocities, grid_size, box_size, h, mass, a
 
 
 def read_snapshots(snapshots):
-    """Returns displacement and velocity fields from the given list of swift 
-    snapshots. The box_size, grid_size and particle mass are also returned.
+    """Returns displacement and velocity fields and scale factors from the 
+    given list of swift snapshots. The box_size, grid_size and particle mass 
+    are also returned.
     """
     displacement_fields = []
-    velocity_fields = []
+    velocity_fields     = []
+    scale_factors       = []
     
     for snapshot in snapshots:
         data = read_snapshot(snapshot)
-        IDs, coordinates, velocities, grid_size, box_size, h, mass = data
+        IDs, coordinates, velocities, grid_size, box_size, h, mass, a = data
         
         coordinates = coordinates.transpose()
         displacement_fields.append(
@@ -52,7 +55,17 @@ def read_snapshots(snapshots):
             get_velocity_field(velocities, IDs, box_size, grid_size)
         )
         
+        scale_factors.append(a)
+        
     displacement_fields = np.stack(displacement_fields)
-    velocity_fields = np.stack(velocity_fields)
+    velocity_fields     = np.stack(velocity_fields)
+    scale_factors       = np.concatenate(scale_factors)
     
-    return displacement_fields, velocity_fields, box_size, grid_size, mass
+    return (
+        displacement_fields, 
+        velocity_fields, 
+        scale_factors, 
+        box_size, 
+        grid_size, 
+        mass
+    )
