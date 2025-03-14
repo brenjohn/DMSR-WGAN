@@ -125,6 +125,8 @@ class DMSRWGAN:
         # Move data to the device.
         lr_batch = lr_batch.to(self.device)
         hr_batch = hr_batch.to(self.device)
+        if style is not None:
+            style = style.to(self.device)
         
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.generator.padding)

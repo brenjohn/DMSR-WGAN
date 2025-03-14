@@ -4,6 +4,9 @@
 Created on Thu Feb 27 12:25:54 2025
 
 @author: brennan
+
+This file defines the a Monitor Manager class which is used to handle monitor 
+objects during training.
 """
 
 import time

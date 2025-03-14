@@ -27,7 +27,7 @@ def read_snapshot(snapshot):
     positions  = np.asarray(dm_data['Coordinates'])
     velocities = np.asarray(dm_data['Velocities'])
     mass       = np.asarray(dm_data['Masses'])[0]
-    a          = file['Cosmology'].attrs['Scale-factor']
+    a          = file['Cosmology'].attrs['Scale-factor'][0]
     file.close()
     return IDs, positions, velocities, grid_size, box_size, h, mass, a
 
@@ -69,3 +69,27 @@ def read_snapshots(snapshots):
         grid_size, 
         mass
     )
+
+
+def read_metadata(snapshot):
+    """Reads the grid_size, box_size, hubble constant h and scale factor a 
+    from the given snapshot.
+    """
+    file      = h5.File(snapshot, 'r')
+    h         = file['Cosmology'].attrs['h'][0]
+    grid_size = file['ICs_parameters'].attrs['Grid Resolution']
+    box_size  = file['Header'].attrs['BoxSize'][0]
+    a         = file['Cosmology'].attrs['Scale-factor'][0]
+    mass      = file['DMParticles']['Masses'][0]
+    file.close()
+    return grid_size, box_size, mass, h, a
+
+
+def read_particle_data(snapshot, data_name):
+    """Read the specified particle data from the given snapshot. `data_name` 
+    can be 'ParticleIDs', 'Coordinates', 'Velocities' or 'Masses'.
+    """
+    file = h5.File(snapshot, 'r')
+    data = np.asarray(file['DMParticles'][data_name])
+    file.close()
+    return data

@@ -38,21 +38,32 @@ os.makedirs(output_dir, exist_ok=True)
 #=============================================================================#
 lr_grid_size   = 20
 input_channels = 6
-base_channels  = 128 
+base_channels  = 128
 crop_size      = 2
-scale_factor   = 4
+upscale_factor = 2
+style_size     = 1
 
 generator = DMSRGenerator(
-    lr_grid_size, input_channels, base_channels, crop_size, scale_factor
+    lr_grid_size, 
+    input_channels, 
+    base_channels, 
+    crop_size, 
+    upscale_factor, 
+    style_size
 )
 
-hr_grid_size      = generator.output_size
-critic_input_size = hr_grid_size
-input_channels    = 20
-base_channels     = 128
+hr_grid_size         = generator.output_size
+critic_input_size    = hr_grid_size
+input_channels       = 20
+base_channels        = 128
+density_scale_factor = 2
 
 critic = DMSRCritic(
-    critic_input_size, input_channels, base_channels, 2
+    critic_input_size, 
+    input_channels, 
+    base_channels, 
+    density_scale_factor, 
+    style_size
 )
 
 generator.to(device)
@@ -75,20 +86,28 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_training_velocity_x64/'
+data_directory = '../../data/dmsr_style_train/'
 batch_size = 4
 
-data = load_numpy_dataset(data_directory)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+metadata = load_numpy_dataset(data_directory + 'metadata.npy')
+box_size        = metadata[0]
+LR_patch_length = metadata[1]
+HR_patch_length = metadata[2]
+LR_patch_size   = metadata[3]
+HR_patch_size   = metadata[4]
+LR_inner_size   = metadata[5]
+padding         = metadata[6]
+LR_mass         = metadata[7]
+HR_mass         = metadata[8]
 
-# Split data into displacements and velocities.
-LR_disp = LR_data[:, :3, ...].float()
-LR_vel  = LR_data[:, 3:, ...].float()
-HR_disp = HR_data[:, :3, ...].float()
-HR_vel  = HR_data[:, 3:, ...].float()
+LR_disp = load_numpy_dataset(data_directory + 'LR_disp_fields.npy')
+LR_vel  = load_numpy_dataset(data_directory + 'LR_vel_fields.npy')
+HR_disp = load_numpy_dataset(data_directory + 'HR_disp_fields.npy')
+HR_vel  = load_numpy_dataset(data_directory + 'HR_vel_fields.npy')
+scale_factors = load_numpy_dataset(data_directory + 'scale_factors.npy')
 
 dataset = DMSRDataset(
-    LR_disp, HR_disp, LR_vel, HR_vel, augment=True
+    LR_disp, HR_disp, LR_vel, HR_vel, scale_factors, augment=True
 )
 
 noramalisation_params = dataset.normalise_dataset()
@@ -105,15 +124,21 @@ hr_position_std = noramalisation_params['hr_position_std']
 #=============================================================================#
 #                           Validation Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_validation_velocity_x64/'
+data_directory = '../../data/dmsr_style_valid/'
 
-data = load_numpy_dataset(data_directory)
-LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
+LR_disp = load_numpy_dataset(data_directory + 'LR_disp_fields.npy')[:16]
+LR_vel  = load_numpy_dataset(data_directory + 'LR_vel_fields.npy')[:16]
+HR_disp = load_numpy_dataset(data_directory + 'HR_disp_fields.npy')[:16]
+HR_vel  = load_numpy_dataset(data_directory + 'HR_vel_fields.npy')[:16]
+scale_factors = load_numpy_dataset(data_directory + 'scale_factors.npy')[:16]
 
-LR_data[:, :3, ...] /= noramalisation_params['lr_position_std']
-LR_data[:, 3:, ...] /= noramalisation_params['lr_velocity_std']
-HR_data[:, :3, ...] /= noramalisation_params['hr_position_std']
-HR_data[:, 3:, ...] /= noramalisation_params['hr_velocity_std']
+LR_disp /= noramalisation_params['lr_position_std']
+LR_vel  /= noramalisation_params['lr_velocity_std']
+HR_disp /= noramalisation_params['hr_position_std']
+HR_vel  /= noramalisation_params['hr_velocity_std']
+
+LR_valid_data = torch.concat([LR_disp, LR_vel], axis=1)
+HR_valid_data = torch.concat([HR_disp, HR_vel], axis=1)
 
 
 #=============================================================================#
@@ -137,10 +162,12 @@ from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
 from dmsr.monitors import UpscaleMonitor
 
-lr_sample = LR_data[2:3, ...].float()
-hr_sample = HR_data[2:3, ...].float()
+lr_sample = LR_valid_data[2:3, ...]
+hr_sample = HR_valid_data[2:3, ...]
 lr_box_size = 20 * box_size / 16 / lr_position_std
 hr_box_size = box_size / hr_position_std
+
+style_sample = scale_factors[2:3, ...]
 
 checkpoint_dir = output_dir + 'checkpoints/'
 samples_dir    = output_dir + 'samples/'
@@ -152,6 +179,7 @@ monitors = {
         generator, 
         lr_sample, hr_sample,
         device,
+        style = style_sample,
         samples_dir = samples_dir
     ),
     
@@ -170,14 +198,15 @@ upscaling_monitor = UpscaleMonitor(
 )
 
 
-particle_mass = 1
-grid_size = int(HR_grid_size)
+particle_mass = HR_mass
+grid_size = int(hr_grid_size)
 upscaling_monitor.set_data_set(
-    LR_data.float(), 
-    HR_data.float(), 
+    LR_valid_data.float(), 
+    HR_valid_data.float(), 
     particle_mass, 
-    hr_box_size, 
-    grid_size
+    HR_patch_length, 
+    grid_size,
+    styles = scale_factors,
 )
 monitors['upscaling_monitor'] = upscaling_monitor
 
@@ -217,5 +246,5 @@ gan.set_monitor(monitor_manager)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1024
+num_epochs = 2
 gan.train(num_epochs)

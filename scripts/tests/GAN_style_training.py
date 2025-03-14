@@ -125,14 +125,17 @@ hr_position_std = noramalisation_params['hr_position_std']
 #=============================================================================#
 # data_directory = 'path/to/validation/data/directory'
 # data = load_numpy_dataset(data_directory)
-
-data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
+num_samples = 4
+data = generate_mock_data(
+    lr_grid_size, hr_grid_size, channels=6, samples=num_samples
+)
 LR_data, HR_data = data
 
 LR_data[:, :3, ...] /= noramalisation_params['lr_position_std']
 LR_data[:, 3:, ...] /= noramalisation_params['lr_velocity_std']
 HR_data[:, :3, ...] /= noramalisation_params['hr_position_std']
 HR_data[:, 3:, ...] /= noramalisation_params['hr_velocity_std']
+styles = torch.randn((num_samples, style_size)).to(device)
 
 
 #=============================================================================#
@@ -160,7 +163,7 @@ lr_sample = LR_data[2:3, ...].float()
 hr_sample = HR_data[2:3, ...].float()
 lr_box_size = 20 * box_size / 16 / lr_position_std
 hr_box_size = box_size / hr_position_std
-style_sample = torch.randn((1, style_size)).to(device)
+style_sample = styles[2:3, ...]
 
 checkpoint_dir = output_dir + 'checkpoints/'
 samples_dir    = output_dir + 'samples/'
@@ -199,7 +202,7 @@ upscaling_monitor.set_data_set(
     particle_mass, 
     box_size, 
     grid_size,
-    style = style_sample
+    styles = styles
 )
 monitors['upscaling_monitor'] = upscaling_monitor
 
