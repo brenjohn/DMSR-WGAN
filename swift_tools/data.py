@@ -30,22 +30,6 @@ def read_snapshot(snapshot):
     return positions, grid_size, box_size, h, mass
 
 
-def read_snapshot(snapshot):
-    file = h5.File(snapshot, 'r')
-    
-    h = file['Cosmology'].attrs['h'][0]
-    
-    grid_size = file['ICs_parameters'].attrs['Grid Resolution']
-    box_size = file['Header'].attrs['BoxSize'][0]
-    
-    dm_data = file['DMParticles']
-    positions = np.asarray(dm_data['Coordinates'])
-    mass = np.asarray(dm_data['Masses'])[0]
-    
-    file.close()
-    return positions, grid_size, box_size, h, mass
-
-
 def read_snapshots(snapshots):
     """Returns displacement fields from the given list of swift napshots.
     """
