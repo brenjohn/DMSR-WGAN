@@ -87,7 +87,7 @@ def read_metadata(snapshot):
 
 def read_particle_data(snapshot, data_name):
     """Read the specified particle data from the given snapshot. `data_name` 
-    can be 'ParticleIDs', 'Coordinates', 'Velocities' or 'Masses'.
+    can be 'ParticleIDs', 'Coordinates', 'Velocities', 'Masses' or Potentials.
     """
     file = h5.File(snapshot, 'r')
     data = np.asarray(file['DMParticles'][data_name])

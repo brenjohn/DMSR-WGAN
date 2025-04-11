@@ -32,19 +32,34 @@ def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
     scale_factor = generator.scale_factor
       
     with h5.File(sr_snapshot, 'a') as sr_file:
+        cosmic_scale_factor = np.asarray(
+            sr_file['Cosmology'].attrs['Scale-factor']
+        )[None, ...]
+        cosmic_scale_factor = torch.from_numpy(cosmic_scale_factor).float()
+        if generator.style_size is None:
+            cosmic_scale_factor = None
+        
         dm_data = sr_file['DMParticles']
         
         update_particle_mass(dm_data, scale_factor)
         update_potentials(dm_data, scale_factor)
         update_softenings(dm_data, scale_factor)
-        update_particle_data(sr_file, generator, scale_params, device)
+        update_particle_data(
+            sr_file, generator, scale_params, cosmic_scale_factor, device
+        )
         
         grid_size = sr_file['ICs_parameters'].attrs['Grid Resolution']
         sr_grid_size = scale_factor * grid_size
         sr_file['ICs_parameters'].attrs['Grid Resolution'] = sr_grid_size
     
     
-def update_particle_data(file, generator, scale_params, device):
+def update_particle_data(
+        file, 
+        generator, 
+        scale_params,
+        cosmic_scale_factor,
+        device
+    ):
     """
     Use the given generator to upscale the particle data in the given file.
     """
@@ -87,7 +102,7 @@ def update_particle_data(file, generator, scale_params, device):
     sr_patches = []
     for patch in fields:
         patch = torch.from_numpy(patch).float()
-        sr_patch = generator(patch[None, ...], z)
+        sr_patch = generator(patch[None, ...], z, cosmic_scale_factor)
         sr_patch = sr_patch.detach()
         sr_patches.append(sr_patch.numpy())
     del fields

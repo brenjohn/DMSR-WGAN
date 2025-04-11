@@ -76,6 +76,21 @@ def get_positions(displacement_field, box_size, grid_size, periodic=True):
     return positions
 
 
+def get_particle_potential_field(potentials, ids, grid_size):
+    """Creates a particle potential field from the given particle potentials 
+    and particle IDs.
+    """
+    # Use the particle IDs to compute particle grid indices (ix, iy, iz).
+    ix = ids // (grid_size * grid_size)
+    iy = (ids % (grid_size * grid_size)) // grid_size
+    iz = ids % grid_size
+    
+    # Arrange displacements into a field and return it.
+    potential_field = np.zeros((1, grid_size, grid_size, grid_size))
+    potential_field[:, ix, iy, iz] = potentials
+    return potential_field
+
+
 def cut_field(fields, cut_size, stride=0, pad=0):
     """Cuts the given field tensor into blocks of size `cut_size`.
     

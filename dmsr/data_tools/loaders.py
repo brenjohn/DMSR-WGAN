@@ -27,7 +27,6 @@ def load_normalisation_parameters(param_file):
     
     if exists(param_file):
         scale_params = np.load(param_file, allow_pickle=True).item()
-        scale_params = {k : v.item() for k, v in scale_params.items()}
         lr_pos_std = scale_params.get('lr_position_std', 1)
         hr_pos_std = scale_params.get('hr_position_std', 1)
         lr_vel_std = scale_params.get('lr_velocity_std', 1)
