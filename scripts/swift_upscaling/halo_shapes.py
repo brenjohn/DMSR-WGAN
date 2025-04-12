@@ -34,7 +34,7 @@ def moment_of_inertia(positions):
 data_dir = './swift_snapshots/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
-sr_snapshot = data_dir + '064/snap_0002_sr.hdf5'
+sr_snapshot = data_dir + '064/snap_0002_sr_level_1.hdf5'
 
 hr_positions, _, hr_box_size, h, hr_mass = read_snapshot(hr_snapshot)
 sr_positions, _, sr_box_size, h, sr_mass = read_snapshot(sr_snapshot)
@@ -66,14 +66,17 @@ sr_halos = halo_catalogue(sr_positions, sr_box_size, sr_mass * 1e10)
 
 #%%
 def get_shapes(halos, particle_mass):
-    masses = [halo.mass for halo in halos]
+    masses = []
     bas = []
     cas = []
     for i, halo in enumerate(halos):
         print('Halo', i)
-        ba, ca = compute_shape(halo, 35)
-        bas.append(ba)
-        cas.append(ca)
+        ratios = compute_shape(halo, 35)
+        if ratios is not None:
+            ba, ca = ratios
+            bas.append(ba)
+            cas.append(ca)
+            masses.append(halo.mass)
     return masses, bas, cas
 
 hr_masses, hr_bas, hr_cas = get_shapes(hr_halos, hr_mass)
@@ -103,7 +106,7 @@ plt.ylabel('c / a', fontsize=14)
 plt.ylim(0, 1)
 plt.legend()
 plt.tight_layout()
-plt.savefig('ca.png', dpi=210)
+plt.savefig('ca_level_1.png', dpi=210)
 plt.show()
 plt.close()
 
@@ -139,6 +142,7 @@ plt.xlabel('Mass', fontsize=14)
 plt.ylabel(r'$c/a$', fontsize=14)
 plt.legend()
 plt.tight_layout()
+plt.savefig('median_shape_level_1.png', dpi=210)
 plt.show()
 plt.close()
 
@@ -154,7 +158,7 @@ plt.xlabel('b / a')
 plt.ylabel('c / a')
 plt.legend()
 plt.tight_layout()
-plt.savefig('ba_vs_ca.png', dpi=210)
+plt.savefig('ba_vs_ca_level_1.png', dpi=210)
 plt.show()
 plt.close()
 
@@ -218,4 +222,25 @@ plt.legend(handles=[hr_patch, sr_patch], fontsize=21)
 
 # Show plot
 plt.tight_layout()
+plt.savefig('shape_distribution_level_1.png', dpi=210)
+plt.show()
+
+#%%
+# compute_shape(sr_halos[384], 35)
+sr_halos[384].positions
+
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
+n = 100
+
+xs = sr_halos[384].positions[:, 0]
+ys = sr_halos[384].positions[:, 1]
+zs = sr_halos[384].positions[:, 2]
+ax.scatter(xs, ys, zs)
+
+ax.set_xlabel('X Label')
+ax.set_ylabel('Y Label')
+ax.set_zlabel('Z Label')
+
 plt.show()

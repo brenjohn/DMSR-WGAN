@@ -99,13 +99,19 @@ def compute_shape(halo, max_iterations=10):
         inside_ellipsoid = scaled_elliptic_radii <= 1
         positions = positions[inside_ellipsoid, :]
         
+        # If no particles are inside the volume, return none to signal the
+        # method failed.
+        if not np.any(inside_ellipsoid):
+            print('Computing shape failed')
+            return None
+        
         # Compute the shape tensor for the particles inside the current 
         # ellipsoid
         shape_tensor = compute_shape_tensor(positions)
         
         # Compute principle axes and lengths of the new shape tensor
         eig_vals, principal_axes = la.eigh(shape_tensor)
-        principle_ratios = np.sqrt(eig_vals)
+        principle_ratios = np.sqrt(np.abs(eig_vals))
         principle_ratios /= principle_ratios[-1]
         principle_lengths = initial_principle_lengths * principle_ratios
     
