@@ -22,7 +22,7 @@ from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import DMSRDataset
-from dmsr.data_tools import load_numpy_dataset
+from dmsr.data_tools import load_numpy_tensor
 from dmsr.data_tools import generate_mock_data
 
 
@@ -92,7 +92,7 @@ batch_size = 4
 lr_padding = generator.padding
 
 # data_directory = '../../data/dmsr_training/'
-# data = load_numpy_dataset(data_directory)
+# data = load_numpy_tensor(data_directory)
 data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
 LR_data, HR_data = data
 box_size = 1
@@ -124,7 +124,7 @@ hr_position_std = noramalisation_params['hr_position_std']
 #                           Validation Dataset
 #=============================================================================#
 # data_directory = 'path/to/validation/data/directory'
-# data = load_numpy_dataset(data_directory)
+# data = load_numpy_tensor(data_directory)
 num_samples = 4
 data = generate_mock_data(
     lr_grid_size, hr_grid_size, channels=6, samples=num_samples

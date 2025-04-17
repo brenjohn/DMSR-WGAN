@@ -12,11 +12,10 @@ import numpy as np
 from os.path import exists
 
 
-def load_numpy_dataset(filename):
+def load_numpy_tensor(filename):
     """Returns data contained in the given numpy file.
     """
-    data = np.load(filename)
-    return torch.from_numpy(data).float()
+    return torch.from_numpy(np.load(filename)).float()
 
 
 def load_normalisation_parameters(param_file):
