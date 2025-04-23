@@ -38,13 +38,13 @@ Note, this project used the following dependencies:
 Results were produced for [On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/2501.13056 ) using the workflow outlined below. Please refer to the paper for further details on architecture and parameters used.
 
 1. **Generate Initial Conditions for Dark-Matter-Only Simulations**
-   - Initial conditions for dark-matter-only simulations where generated using [MUSIC](https://bitbucket.org/ohahn/music/src/master/).
+   - Initial conditions for dark-matter-only simulations where generated using [MUSIC2-monofonIC](https://bitbucket.org/ohahn/monofonic/src/master/) (version 9.4.0).
    - Parameter files for generating 17 pairs of initial conditions, with each pair consiting of a low-resolution and high-resolution realisation, can be found in `data/dmsr_runs/`.
    - Each simulation pair has a dedicated directory `runAB` containing directories for the low-resolution and high-resolution simulations.
    - Initial conditions were generated within each simulation directory using the `ics.conf` MUSIC parameter file.
 
 2. **Run Simulations with SWIFT**
-   - The dark-matter-only simulations were run in each simulation directory using [SWIFT code](https://swift.dur.ac.uk/) and the `dmsr_run.yml` parameter file.
+   - The dark-matter-only simulations were run in each simulation directory using [SWIFT code](https://swift.dur.ac.uk/) (version 1.0.0) and the `dmsr_run.yml` parameter file.
    - Snapshots from the simulation were stored as HDF5 files in each simulation directory for processing in the next step.
 
 3. **Prepare Datasets**
