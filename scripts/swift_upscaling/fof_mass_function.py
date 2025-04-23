@@ -17,14 +17,14 @@ import matplotlib.pyplot as plt
 
 from numpy import log10, histogram
 from swift_tools.data import read_snapshot
-from swift_tools.friends_of_friends import friend_of_friends
+from swift_tools.friends_of_friends import friends_of_friends
 
 
 #%% Read in snapshot data.
 data_dir = './swift_snapshots/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
-sr_snapshot = data_dir + '064/snap_0002_sr.hdf5'
+sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 
 lr_positions, _, lr_box_size, h, lr_mass = read_snapshot(lr_snapshot)
 hr_positions, _, hr_box_size, h, hr_mass = read_snapshot(hr_snapshot)
@@ -40,7 +40,7 @@ def halo_masses(positions, box_size, mass):
     volume = box_size**3
     mean_interparticle_separation = (volume / len(positions))**(1/3)
     linking_length = b * mean_interparticle_separation
-    halos = friend_of_friends(positions, box_size, linking_length)
+    halos = friends_of_friends(positions, box_size, linking_length)
     return [mass * 1e10 * len(halo) for halo in halos if len(halo) > N]
 
 
@@ -74,9 +74,9 @@ plt.plot(bins, log10(sr_halo_mass/volume),
          linewidth=4, label='Super Resolution', zorder=2)
 
 plt.xticks([13, 13.5, 14, 14.5])
-plt.yticks([-5.5, -5, -4.5, -4, -3.5])
-plt.xlim((12.9, 14.5))
-plt.ylim((-5.6, -3.3))
+plt.yticks([-6.0, -5.5, -5, -4.5, -4])
+plt.xlim((12.95, 14.5))
+plt.ylim((-6.05, -3.8))
 
 plt.tick_params(axis='both', which='major', labelsize=14)
 plt.xlabel(r'Halo Mass$ \quad [\log_{10} M_\odot]$', fontsize=16)
