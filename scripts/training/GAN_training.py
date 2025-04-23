@@ -20,7 +20,7 @@ from dmsr.dmsr_gan.dmsr_critic import DMSRCritic
 from dmsr.dmsr_gan.dmsr_generator import DMSRGenerator
 
 from dmsr.dmsr_gan.dmsr_dataset import DMSRDataset
-from dmsr.swift_processing import load_numpy_dataset
+from swift_tools.data import load_numpy_dataset
 
 
 # Check if CUDA is available and set the device
@@ -77,8 +77,6 @@ batch_size = 4
 data = load_numpy_dataset(data_directory)
 LR_data, HR_data, box_size, LR_grid_size, HR_grid_size = data
 
-# TODO: The four below depends on scale factor. Maybe this should be read from
-# dataset somehow or metadata.
 lr_padding = 2
 
 dataset = DMSRDataset(
