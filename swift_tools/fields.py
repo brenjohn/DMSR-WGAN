@@ -29,7 +29,8 @@ def get_displacement_field(positions, ids, box_size, grid_size):
     
     # Create an array containing the postions of grid points.
     cell_size = box_size / grid_size
-    points = np.arange(cell_size/2, box_size, cell_size)
+    # points = np.arange(cell_size/2, box_size, cell_size)
+    points = np.arange(0, box_size, cell_size)
     grid_points = np.stack((points[ix], points[iy], points[iz]))
     
     # Compute the displacement of each particle from its associated grid point.
@@ -64,7 +65,9 @@ def get_positions(displacement_field, box_size, grid_size, periodic=True):
     """Creates an array containing the absolute coordinates of particles from 
     the given displacement field.
     """
-    points = np.arange(0, box_size, box_size/grid_size)
+    cell_size = box_size / grid_size
+    # points = np.arange(cell_size/2, box_size, cell_size)
+    points = np.arange(0, box_size, cell_size)
     grid = np.stack(np.meshgrid(points, points, points, indexing='ij'))
     
     positions = (grid + displacement_field)

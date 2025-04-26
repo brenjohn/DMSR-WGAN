@@ -39,7 +39,9 @@ def create_fields(
         particle_data = read_particle_data(snapshot, particle_data_name)
         
         particle_data = particle_data.transpose()
-        field_data = get_field_data(particle_data, IDs, box_size, grid_size)
+        field_data = get_field_data(
+            particle_data, IDs, a * box_size, grid_size
+        )
         
         patches = cut_field(
             field_data[None,...], patch_size, patch_size, pad=padding
