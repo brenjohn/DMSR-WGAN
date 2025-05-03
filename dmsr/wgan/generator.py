@@ -11,7 +11,7 @@ This file defines the generator model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import randn
-from ..field_operations.resize import crop
+from ..data_tools import crop
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import HBlock
 

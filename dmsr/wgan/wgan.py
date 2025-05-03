@@ -14,7 +14,7 @@ from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
 
-from ..field_operations.resize import crop
+from ..data_tools.resize import crop
 
 
 class DMSRWGAN:
@@ -84,6 +84,8 @@ class DMSRWGAN:
         # Move data to the device.
         lr_batch = lr_batch.to(self.device)
         hr_batch = hr_batch.to(self.device)
+        if style is not None:
+            style = style.to(self.device)
         
         # Use the generator to create fake data.
         z = self.generator.sample_latent_space(self.batch_size, self.device)
@@ -103,6 +105,8 @@ class DMSRWGAN:
         # Move data to the device.
         lr_batch = lr_batch.to(self.device)
         hr_batch = hr_batch.to(self.device)
+        if style is not None:
+            style = style.to(self.device)
         
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.generator.padding)

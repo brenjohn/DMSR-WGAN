@@ -50,7 +50,6 @@ fields = [
 
 scale_factor_file = dataset_dir + 'scale_factors.npy'
 scale_factors = np.load(scale_factor_file)
-unique_scale_factors = np.unique(scale_factors)
 
 
 #%%

@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from .conv import DMSRConv, DMSRStyleConv
 from torch.nn.functional import interpolate
-from ..field_operations.resize import crop
+from ..data_tools import crop
 
 
 

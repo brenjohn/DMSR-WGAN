@@ -119,18 +119,18 @@ def cut_field(fields, cut_size, stride=0, pad=0):
     
     cuts = []
     for i in range(0, grid_size, stride):
+        slice_x = [n % grid_size for n in range(i-pad, i+cut_size+pad)]
+        cut_x = np.take(fields, slice_x, axis=2)
+        
         for j in range(0, grid_size, stride):
+            slice_y = [n % grid_size for n in range(j-pad, j+cut_size+pad)]
+            cut_y = np.take(cut_x, slice_y, axis=3)
+            
             for k in range(0, grid_size, stride):
-                
-                slice_x = [n % grid_size for n in range(i-pad, i+cut_size+pad)]
-                slice_y = [n % grid_size for n in range(j-pad, j+cut_size+pad)]
                 slice_z = [n % grid_size for n in range(k-pad, k+cut_size+pad)]
+                cut_z = np.take(cut_y, slice_z, axis=4)
                 
-                patch = np.take(fields, slice_x, axis=2)
-                patch = np.take(patch, slice_y, axis=3)
-                patch = np.take(patch, slice_z, axis=4)
-                
-                cuts.append(patch)
+                cuts.append(cut_z)
     
     return np.concatenate(cuts)
 

@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from torch import concat, rand, autograd
-from ..field_operations.conversion import cic_density_field
+from ..field_analysis import cic_density_field
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 

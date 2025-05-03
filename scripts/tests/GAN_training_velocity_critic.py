@@ -21,9 +21,9 @@ from dmsr.wgan import DMSRWGAN
 from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
-from dmsr.data_tools import DMSRDataset
-from dmsr.data_tools import load_numpy_dataset
-from dmsr.data_tools import generate_mock_data
+from dmsr.data_tools import PatchDataSet
+from dmsr.data_tools import load_numpy_tensor
+from dmsr.data_tools import generate_mock_dataset
 
 
 # Check if CUDA is available and set the device
@@ -77,49 +77,72 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-batch_size = 4
-lr_padding = generator.padding
-
-# data_directory = '../../data/dmsr_training/'
-# data = load_numpy_dataset(data_directory)
-data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
-LR_data, HR_data = data
-box_size = 1
-
-# Split data into displacements and velocities.
-LR_disp = LR_data[:, :3, ...].float()
-LR_vel  = LR_data[:, 3:, ...].float()
-HR_disp = HR_data[:, :3, ...].float()
-HR_vel  = HR_data[:, 3:, ...].float()
-
-dataset = DMSRDataset(
-    LR_disp, HR_disp, LR_vel, HR_vel, augment=True
+data_directory = './data/test_train/'
+generate_mock_dataset(
+    data_dir           = data_directory, 
+    num_patches        = 16,
+    lr_grid_size       = lr_grid_size,
+    hr_grid_size       = hr_grid_size,
+    lr_padding         = generator.padding,
+    include_velocities = True, 
+    include_scales     = False,
+    include_spectra    = False
 )
+batch_size = 2
 
-noramalisation_params = dataset.normalise_dataset()
-np.save(output_dir + 'normalisation.npy', noramalisation_params)
+metadata = load_numpy_tensor(data_directory + 'metadata.npy')
+box_size        = metadata[0].item()
+LR_patch_length = metadata[1].item()
+HR_patch_length = metadata[2].item()
+LR_patch_size   = metadata[3].int().item()
+HR_patch_size   = metadata[4].int().item()
+LR_inner_size   = metadata[5].int().item()
+padding         = metadata[6].int().item()
+LR_mass         = metadata[7].item()
+HR_mass         = metadata[8].item()
+
+training_summary_stats = np.load(
+    data_directory + 'summary_stats.npy', allow_pickle=True
+).item()
+np.save(output_dir + 'normalisation.npy', training_summary_stats)
+
+dataset = PatchDataSet(
+    lr_position_dir   = data_directory + 'LR_disp_fields/',
+    hr_position_dir   = data_directory + 'HR_disp_fields/',
+    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
+    hr_velocity_dir   = data_directory + 'HR_vel_fields/',
+    summary_stats     = training_summary_stats,
+    augment=True
+)
 
 dataloader = DataLoader(
     dataset, batch_size=batch_size, shuffle=True, drop_last=True
 )
 
-lr_position_std = noramalisation_params['lr_position_std']
-hr_position_std = noramalisation_params['hr_position_std']
-
 
 #=============================================================================#
 #                           Validation Dataset
 #=============================================================================#
-# data_directory = 'path/to/validation/data/directory'
-# data = load_numpy_dataset(data_directory)
+from dmsr.data_tools import SpectraDataset
 
-data = generate_mock_data(lr_grid_size, hr_grid_size, channels=6, samples=4)
-LR_data, HR_data = data
+valid_data_directory = './data/test_valid/'
+generate_mock_dataset(
+    data_dir           = valid_data_directory, 
+    num_patches        = 4,
+    lr_grid_size       = LR_patch_size,
+    hr_grid_size       = HR_patch_size,
+    lr_padding         = padding,
+    include_velocities = True, 
+    include_scales     = False,
+    include_spectra    = True
+)
 
-LR_data[:, :3, ...] /= noramalisation_params['lr_position_std']
-LR_data[:, 3:, ...] /= noramalisation_params['lr_velocity_std']
-HR_data[:, :3, ...] /= noramalisation_params['hr_position_std']
-HR_data[:, 3:, ...] /= noramalisation_params['hr_velocity_std']
+spectra_data = SpectraDataset(
+    lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
+    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/',
+    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
+    summary_stats     = training_summary_stats,
+)
 
 
 #=============================================================================#
@@ -129,7 +152,7 @@ gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(
     dataloader, 
     batch_size, 
-    box_size / hr_position_std
+    box_size / training_summary_stats['HR_disp_fields_std']
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
@@ -141,12 +164,8 @@ gan.set_optimizer(optimizer_c, optimizer_g)
 #=============================================================================#
 from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
-from dmsr.monitors import UpscaleMonitor
+from dmsr.monitors import SpectrumMonitor
 
-lr_sample = LR_data[2:3, ...].float()
-hr_sample = HR_data[2:3, ...].float()
-lr_box_size = 20 * box_size / 16 / lr_position_std
-hr_box_size = box_size / hr_position_std
 
 checkpoint_dir = output_dir + 'checkpoints/'
 samples_dir    = output_dir + 'samples/'
@@ -155,39 +174,32 @@ monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
     'samples_monitor' : SamplesMonitor(
-        generator, 
-        lr_sample, hr_sample,
-        device,
-        samples_dir = samples_dir
+        generator,
+        valid_data_directory,
+        patch_number     = 1,
+        device           = device,
+        include_velocity = True,
+        include_style    = False,
+        samples_dir      = output_dir + 'samples/'
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
         gan,
         checkpoint_dir = checkpoint_dir
+    ),
+    
+    'spectrum_monitor' : SpectrumMonitor(
+        gan,
+        spectra_data,
+        HR_patch_length,
+        HR_patch_size,
+        training_summary_stats,
+        device,
+        checkpoint_dir = checkpoint_dir
     )
 }
 
-realisations = 1
-upscaling_monitor = UpscaleMonitor(
-    gan,
-    realisations,
-    device,
-    checkpoint_dir = checkpoint_dir
-)
-
-
-particle_mass = 1
-grid_size = int(hr_grid_size)
-upscaling_monitor.set_data_set(
-    LR_data.float(), 
-    HR_data.float(), 
-    particle_mass, 
-    box_size, 
-    grid_size
-)
-monitors['upscaling_monitor'] = upscaling_monitor
-
-batch_report_rate = 16
+batch_report_rate = 2
 monitor_manager = MonitorManager(batch_report_rate, device)
 monitor_manager.set_monitors(monitors)
 gan.set_monitor(monitor_manager)

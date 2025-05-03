@@ -13,8 +13,8 @@ import torch.nn as nn
 from torch import concat, rand, autograd
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
-from ..field_operations.conversion import cic_density_field
-from ..field_operations.resize import pixel_unshuffle
+from ..field_analysis import cic_density_field
+from ..data_tools import pixel_unshuffle
 
 
 class DMSRCritic(nn.Module):

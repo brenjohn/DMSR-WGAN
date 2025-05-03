@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Dec  4 13:06:10 2024
+Created on Wed Apr 30 11:20:57 2025
 
 @author: brennan
 
-This file has a function that uses a cloud-in-cells method for computing
+This file has an implementation of the cloud-in-cells method for computing
 density fields from position data.
 """
 
 import numpy as np
 
 
-def cloud_in_cells(particles, grid_size, box_size, value=1):
+def cloud_in_cells(particles, grid_size, box_size, value=1, periodic=True):
     """Converts particle coordinates into a density field with shape 
     (grid_size, grid_size, grid_size) using Cloud-in-Cells (CIC) interpolation.
 
@@ -44,27 +44,36 @@ def cloud_in_cells(particles, grid_size, box_size, value=1):
              dx[:, 0]  *      dx[:, 1]  *      dx[:, 2],
     ]
 
-    # Neighboring indices for each particle (including wrap-around 
-    # using % grid_size)
-    N = grid_size
-    x, y, z = xi[:, 0], xi[:, 1], xi[:, 2]
-    neighbors = [
-              (x % N,       y % N,       z % N),
-        ((x + 1) % N,       y % N,       z % N),
-              (x % N, (y + 1) % N,       z % N),
-        ((x + 1) % N, (y + 1) % N,       z % N),
-              (x % N,       y % N, (z + 1) % N),
-        ((x + 1) % N,       y % N, (z + 1) % N),
-              (x % N, (y + 1) % N, (z + 1) % N),
-        ((x + 1) % N, (y + 1) % N, (z + 1) % N),
-    ]
+    # The offsets defineing the 8 neighbours of a cell.
+    offsets = np.array([
+        [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+        [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
+    ])
 
     # Accumulate density contributions
     density_field = np.zeros((grid_size, grid_size, grid_size))
-    for weight, (nx, ny, nz) in zip(weights, neighbors):
-        np.add.at(density_field, (nx, ny, nz), value * weight)
+    for offset, weight in zip(offsets, weights):
+        neighbour = xi + offset[None, :]
+        
+        if periodic:
+            # Wrap particles around box if they're outside of it.
+            neighbour %= grid_size
+            np.add.at(
+                density_field, 
+                (neighbour[:, 0], neighbour[:, 1], neighbour[:, 2]),
+                value * weight
+            )
+            
+        else:
+            # Mask out particles contributing outside the grid
+            valid = np.all((neighbour >= 0) & (neighbour < grid_size), axis=1)
+            neighbour = neighbour[valid]
+            np.add.at(
+                density_field, 
+                (neighbour[:, 0], neighbour[:, 1], neighbour[:, 2]), 
+                (value * weight[valid])
+            )
 
     # Normalize by cell volume to get density
     density_field /= cell_size**3
-
     return density_field

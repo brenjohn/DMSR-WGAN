@@ -7,9 +7,11 @@ Created on Fri Mar 14 14:27:20 2025
 """
 
 import os
+import torch
 import numpy as np
 
 from .monitor import Monitor
+from ..data_tools import load_numpy_tensor
 
 
 class SamplesMonitor(Monitor):
@@ -19,13 +21,18 @@ class SamplesMonitor(Monitor):
     
     def __init__(
             self,
-            generator, 
-            lr_sample, 
-            hr_sample,
+            generator,
+            data_directory,
+            patch_number,
             device,
-            style = None,
+            include_velocity = True,
+            include_style = True,
             samples_dir = './data/samples/'
         ):
+        
+        lr_sample, hr_sample, style = self.get_sample(
+            data_directory, patch_number, include_velocity, include_style
+        )
         
         self.lr_sample = lr_sample
         self.hr_sample = hr_sample
@@ -33,14 +40,43 @@ class SamplesMonitor(Monitor):
         
         self.device = device
         self.generator = generator
-        batch_size = lr_sample.shape[0]
-        z = generator.sample_latent_space(batch_size, device)
+        z = generator.sample_latent_space(1, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = samples_dir
         os.makedirs(self.samples_dir, exist_ok=True)
         np.save(self.samples_dir + 'lr_sample.npy', lr_sample.numpy())
         np.save(self.samples_dir + 'hr_sample.npy', hr_sample.numpy())
+        
+        
+    def get_sample(
+            self, 
+            data_dir, 
+            patch_num, 
+            include_velocity,
+            include_style
+        ):
+        patch_name = f'patch_{patch_num}.npy'
+        lr_data = load_numpy_tensor(data_dir + 'LR_disp_fields/' + patch_name)
+        hr_data = load_numpy_tensor(data_dir + 'HR_disp_fields/' + patch_name)
+        style = None
+        
+        if include_velocity:
+            lr_velocity = load_numpy_tensor(
+                data_dir + 'LR_vel_fields/' + patch_name
+            )
+            hr_velocity = load_numpy_tensor(
+                data_dir + 'HR_vel_fields/' + patch_name
+            )
+            
+            lr_data = torch.concat((lr_data, lr_velocity))
+            hr_data = torch.concat((hr_data, hr_velocity))
+            
+        if include_style:
+            styles = load_numpy_tensor(data_dir + 'scale_factors.npy')
+            style = styles[patch_num][None, ...]
+        
+        return lr_data[None, ...], hr_data[None, ...], style
         
         
     def post_epoch_processing(self, epoch):

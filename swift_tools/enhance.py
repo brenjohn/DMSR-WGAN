@@ -20,7 +20,7 @@ from .fields import get_displacement_field, get_velocity_field
 from .fields import cut_field, stitch_fields
 
 
-def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
+def enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device):
     """
     Use the given generator to enhance the `lr_snapshot` and save the result in
     `sr_snapshot`
@@ -45,7 +45,7 @@ def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
         update_potentials(dm_data, scale_factor)
         update_softenings(dm_data, scale_factor)
         update_particle_data(
-            sr_file, generator, scale_params, cosmic_scale_factor, device
+            sr_file, generator, z, scale_params, cosmic_scale_factor, device
         )
         
         grid_size = sr_file['ICs_parameters'].attrs['Grid Resolution']
@@ -55,7 +55,8 @@ def enhance(lr_snapshot, sr_snapshot, generator, scale_params, device):
     
 def update_particle_data(
         file, 
-        generator, 
+        generator,
+        z,
         scale_params,
         cosmic_scale_factor,
         device
@@ -68,11 +69,11 @@ def update_particle_data(
     output_size        = generator.output_size
     pad                = generator.padding
     scale_factor       = generator.scale_factor
-    z                  = generator.sample_latent_space(1, device)
+    # z                  = generator.sample_latent_space(1, device)
     upscale_velocities = generator.input_channels == 6
     
-    lr_position_std = scale_params.get('lr_position_std', 1)
-    hr_position_std = scale_params.get('hr_position_std', 1)
+    lr_position_std = scale_params.get('LR_disp_fields_std', 1)
+    hr_position_std = scale_params.get('HR_disp_fields_std', 1)
     
     dm_data   = file['DMParticles']
     grid_size = file['ICs_parameters'].attrs['Grid Resolution']
@@ -85,8 +86,8 @@ def update_particle_data(
     fields /= lr_position_std
     
     if upscale_velocities:
-        lr_velocity_std = scale_params.get('lr_velocity_std', 1)
-        hr_velocity_std = scale_params.get('hr_velocity_std', 1)
+        lr_velocity_std = scale_params.get('LR_vel_fields_std', 1)
+        hr_velocity_std = scale_params.get('HR_vel_fields_std', 1)
         
         velocity = np.asarray(dm_data['Velocities'])
         velocity = velocity.transpose()

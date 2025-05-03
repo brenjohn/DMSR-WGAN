@@ -10,12 +10,13 @@ import torch
 import numpy as np
 
 from .monitor import Monitor
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
-from ..analysis import displacement_power_spectrum
+
+from ..field_analysis import cic_density_field, power_spectrum
 
 
-class UpscaleMonitor(Monitor):
+class SpectrumMonitor(Monitor):
     """A monitor class for tracking the uniform metric, or Chebyshev distance,
     between the power spectra of real high resolution data and fake super
     resolution data created by the generator.
@@ -26,88 +27,48 @@ class UpscaleMonitor(Monitor):
     
     def __init__(
             self, 
-            gan, 
-            realisations, 
+            gan,
+            dataset,
+            box_size,
+            grid_size,
+            summary_stats,
             device,
             checkpoint_dir
         ):
         self.gan = gan
         self.generator = gan.generator
-        self.realisations = realisations
+        self.box_size = box_size
+        self.grid_size = grid_size
+        self.summary_stats = summary_stats
+        self.num_samples = len(dataset)
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         
-        self.current_best_uniform_metric = float('inf')
-        self.uniform_metric_history = []
-        self.current_best_l2_metric = float('inf')
-        self.l2_metric_history = []
-    
-        
-    def set_data_set(
-            self, 
-            lr_data, 
-            hr_data,
-            particle_mass, 
-            box_size, 
-            grid_size,
-            styles = None
-        ):
-        """
-        Creates a dataset consiting of samples of lr particle displacements,
-        the power spectrum of the corresponding hr particle displacments and
-        optional style parameters.
-        
-        This is used for computing both the uniform metric and l2 metric 
-        between the power spectra of hr and sr data.
-        
-        The dataset is composed with a dataloader object which is stored as a
-        `data` attribute.
-        """
-        # Set basic parameters.
-        self.mass        = particle_mass
-        self.box_size    = box_size
-        self.grid_size   = grid_size
-        self.num_samples = lr_data.shape[0]
-        
-        # Compute the high-resolution spectra.
-        hr_spectra = self.get_spectra(hr_data)
-        device = self.device
-        
-        # Create the appropriate TensorDataset based on whether style data is 
-        # provided.
-        if styles is None:
-            dataset = TensorDataset(lr_data, hr_spectra)
-        else:
-            dataset = TensorDataset(lr_data, hr_spectra, styles)
-         
         # Create a collate function to move data to the device and return a
-        # defualt style variable (None).
+        # default style variable (None).
         def collate(batch):
             batch = list(zip(*batch))
             lr_sample  = default_collate(batch[0]).to(device)
             hr_spectra = default_collate(batch[1]).to(device)
             style = (
-                None if styles is None 
+                None if batch[2][0] is None 
                 else default_collate(batch[2]).to(device)
             )
             return lr_sample, hr_spectra, style
-            
-        self.data = DataLoader(dataset, collate_fn=collate)
         
+        self.data = DataLoader(
+            dataset, 
+            batch_size=1, 
+            # num_workers=1, 
+            # prefetch_factor=8, 
+            collate_fn=collate
+        )
         
-    def get_spectra(self, displacements):
-        """Return a tensor containing the power spectra of the given 
-        displacement data.
-        """
-        spectra = []
-        for sample in displacements:
-            sample = sample[None, 0:3, ...]
-            spectrum = displacement_power_spectrum(
-                sample, self.mass, self.box_size, self.grid_size
-            )
-            spectra.append(spectrum[1])
+        self.current_best_uniform_metric = float('inf')
+        self.uniform_metric_history = []
+        self.current_best_l2_metric = float('inf')
+        self.l2_metric_history = []
         
-        return torch.stack(spectra)
     
     
     def post_epoch_processing(self, epoch):
@@ -119,16 +80,12 @@ class UpscaleMonitor(Monitor):
         l2_metric = 0
         
         for lr_sample, hr_spectrum, style in self.data:
-            # Generate fake super resolution data with the current generator.
+            # Generate fake data and get its power spectrum.
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z, style)
-            sr_sample = sr_sample.detach()
-            
-            # Get the power spectrum of the fake data.
-            sr_sample = sr_sample[:, 0:3, ...]
-            sr_ks, sr_spectrum, sr_uncertainty = displacement_power_spectrum(
-                sr_sample, self.mass, self.box_size, self.grid_size
-            )
+            displacements = sr_sample[:, 0:3, ...].detach()
+            displacements /= self.summary_stats['HR_disp_fields_std']
+            sr_ks, sr_spectrum = self.get_power_spectrum(displacements)
             
             # Compute the uniform metric between the real and fake power 
             # spectrum.
@@ -169,6 +126,14 @@ class UpscaleMonitor(Monitor):
             checkpoint_name += f'_epoch={epoch}'
             checkpoint_name += f'_{l2_metric:.4f}/'
             self.gan.save(self.checkpoint_dir + checkpoint_name)
+    
+    
+    def get_power_spectrum(self, field):
+        box_size = self.box_size
+        grid_size = self.grid_size
+        density = cic_density_field(field, box_size, grid_size)[0, 0, ...]
+        sr_ks, sr_spectrum, _ = power_spectrum(density, box_size, grid_size)
+        return sr_ks, sr_spectrum
     
         
     def uniform_metric(self, spectrum_a, spectrum_b):

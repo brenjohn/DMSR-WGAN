@@ -40,7 +40,7 @@ def create_fields(
         
         particle_data = particle_data.transpose()
         field_data = get_field_data(
-            particle_data, IDs, a * box_size, grid_size
+            particle_data, IDs, box_size, grid_size
         )
         
         patches = cut_field(
@@ -52,10 +52,11 @@ def create_fields(
 
 
 #%% Parameters
-data_directory = '../../data/dmsr_runs/'
+# data_directory = '../../data/dmsr_runs/'
+data_directory = '/media/brennan/Leavitt_data/data/DM_SR/swift-sims/dmsr_z_runs_1Mpc/'
 
-LR_snapshots = np.sort(glob.glob(data_directory + '*/064/snap_0002.hdf5'))
-HR_snapshots = np.sort(glob.glob(data_directory + '*/128/snap_0002.hdf5'))
+LR_snapshots = np.sort(glob.glob(data_directory + 'run9/064/snap_*.hdf5'))
+HR_snapshots = np.sort(glob.glob(data_directory + 'run9/128/snap_*.hdf5'))
 
 num_snaps = len(LR_snapshots)
 
@@ -65,11 +66,12 @@ LR_patch_size = LR_inner_size + 2 * padding
 HR_patch_size = 32
 patches_per_snapshot = (64 // 16)**3
 
-output_dir = '../../data/dmsr_style_train/'
-# os.makedirs(output_dir, exist_ok=True)
+output_dir = '../../data/dmsr_style_valid/'
+os.makedirs(output_dir, exist_ok=True)
 
 
 #%% Metadata
+print('Creating metadata.')
 LR_grid_size, box_size, LR_mass, h, a = read_metadata(LR_snapshots[0])
 HR_grid_size, box_size, HR_mass, h, a = read_metadata(HR_snapshots[0])
 
@@ -88,6 +90,7 @@ np.save(meta_file, [
 
 
 #%% LR displacement
+print('Creating LR displacement patches.')
 LR_disp_dir = output_dir + 'LR_disp_fields/'
 create_fields(
     LR_disp_dir,
@@ -100,6 +103,7 @@ create_fields(
 
 
 #%% HR displacement
+print('Creating HR displacement patches.')
 HR_disp_dir = output_dir + 'HR_disp_fields/'
 create_fields(
     HR_disp_dir,
@@ -112,6 +116,7 @@ create_fields(
 
 
 #%% LR velocity
+print('Creating LR velocity patches.')
 LR_vel_dir = output_dir + 'LR_vel_fields/'
 create_fields(
     LR_vel_dir,
@@ -124,6 +129,7 @@ create_fields(
 
 
 #%% HR velocity
+print('Creating HR velocity patches.')
 HR_vel_dir = output_dir + 'HR_vel_fields/'
 create_fields(
     HR_vel_dir,
@@ -136,6 +142,7 @@ create_fields(
 
 
 #%% Scale factors
+print('Creating scale factors array.')
 num_patches_per_snap = 64
 scale_factors = np.zeros((num_snaps * num_patches_per_snap, 1))
 
