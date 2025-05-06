@@ -27,8 +27,13 @@ class SamplesMonitor(Monitor):
             device,
             include_velocity = True,
             include_style = True,
+            summary_stats = None,
             samples_dir = './data/samples/'
         ):
+        
+        self.device = device
+        self.generator = generator
+        self.summary_stats = summary_stats
         
         lr_sample, hr_sample, style = self.get_sample(
             data_directory, patch_number, include_velocity, include_style
@@ -38,8 +43,6 @@ class SamplesMonitor(Monitor):
         self.hr_sample = hr_sample
         self.style = style
         
-        self.device = device
-        self.generator = generator
         z = generator.sample_latent_space(1, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
@@ -61,6 +64,10 @@ class SamplesMonitor(Monitor):
         hr_data = load_numpy_tensor(data_dir + 'HR_disp_fields/' + patch_name)
         style = None
         
+        if self.summary_stats is not None:
+            lr_data /= self.summary_stats['LR_disp_fields_std']
+            hr_data /= self.summary_stats['HR_disp_fields_std']
+        
         if include_velocity:
             lr_velocity = load_numpy_tensor(
                 data_dir + 'LR_vel_fields/' + patch_name
@@ -68,6 +75,10 @@ class SamplesMonitor(Monitor):
             hr_velocity = load_numpy_tensor(
                 data_dir + 'HR_vel_fields/' + patch_name
             )
+            
+            if self.summary_stats is not None:
+                lr_velocity /= self.summary_stats['LR_vel_fields_std']
+                hr_velocity /= self.summary_stats['HR_vel_fields_std']
             
             lr_data = torch.concat((lr_data, lr_velocity))
             hr_data = torch.concat((hr_data, hr_velocity))

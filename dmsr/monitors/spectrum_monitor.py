@@ -31,6 +31,7 @@ class SpectrumMonitor(Monitor):
             dataset,
             box_size,
             grid_size,
+            particle_mass,
             summary_stats,
             device,
             checkpoint_dir
@@ -39,6 +40,7 @@ class SpectrumMonitor(Monitor):
         self.generator = gan.generator
         self.box_size = box_size
         self.grid_size = grid_size
+        self.particle_mass = particle_mass
         self.summary_stats = summary_stats
         self.num_samples = len(dataset)
         self.device = device
@@ -84,7 +86,7 @@ class SpectrumMonitor(Monitor):
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z, style)
             displacements = sr_sample[:, 0:3, ...].detach()
-            displacements /= self.summary_stats['HR_disp_fields_std']
+            displacements *= self.summary_stats['HR_disp_fields_std']
             sr_ks, sr_spectrum = self.get_power_spectrum(displacements)
             
             # Compute the uniform metric between the real and fake power 
@@ -131,7 +133,9 @@ class SpectrumMonitor(Monitor):
     def get_power_spectrum(self, field):
         box_size = self.box_size
         grid_size = self.grid_size
+        mass = self.particle_mass
         density = cic_density_field(field, box_size, grid_size)[0, 0, ...]
+        density *= mass
         sr_ks, sr_spectrum, _ = power_spectrum(density, box_size, grid_size)
         return sr_ks, sr_spectrum
     

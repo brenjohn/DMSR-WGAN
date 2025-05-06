@@ -17,8 +17,8 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from swift_tools.data import load_normalisation_parameters
-from dmsr.field_operations.conversion import displacements_to_positions
+from dmsr.field_analysis import displacements_to_positions
+
 
 def plot_samples(
         lr_sample, 
@@ -46,15 +46,15 @@ def plot_samples(
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(21, 8))
     
     # LR scatter plot
-    ax1.scatter(lr_xs, lr_ys, alpha=0.2, s=0.5)
+    ax1.scatter(lr_xs, lr_ys, alpha=0.3, s=0.5)
     ax1.set_title('LR')
     
     # HR scatter plot
-    ax3.scatter(hr_xs, hr_ys, alpha=0.1, s=0.1)
+    ax3.scatter(hr_xs, hr_ys, alpha=0.2, s=0.2)
     ax3.set_title('HR')
     
     # SR scatter plot
-    ax2.scatter(sr_xs, sr_ys, alpha=0.1, s=0.1)
+    ax2.scatter(sr_xs, sr_ys, alpha=0.2, s=0.2)
     ax2.set_title('SR')
     ax2.set_xlim(ax3.get_xlim())
     ax2.set_ylim(ax3.get_ylim())
@@ -78,9 +78,9 @@ def get_xys(positions):
 
 
 #%%
-data_dir = './velocity_run/'
-plots_dir = data_dir + 'plots/training_samples/'
-samples_dir = data_dir + 'samples/'
+data_dir = './test_run/'
+plots_dir = data_dir + 'plots/training_samples_1/'
+samples_dir = data_dir + 'samples_1/'
 sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')
 sr_samples = np.sort(sr_samples)
 
@@ -89,21 +89,33 @@ existing_plots = [re.split(r'[._]+', plot)[-2] for plot in existing_plots]
 sr_samples = [sample for sample in sr_samples 
               if not re.split(r'[._]+', sample)[-2] in existing_plots]
 
-scale_path = data_dir + 'normalisation.npy'    
-lr_std, hr_std, _, _ = load_normalisation_parameters(scale_path)
+metadata = np.load(data_dir + 'metadata.npy')
+box_size        = metadata[0]
+LR_patch_length = metadata[1]
+HR_patch_length = metadata[2]
+LR_patch_size   = int(metadata[3])
+HR_patch_size   = int(metadata[4])
+LR_inner_size   = int(metadata[5])
+padding         = int(metadata[6])
+LR_mass         = metadata[7]
+HR_mass         = metadata[8]
 
-lr_sample = np.load(samples_dir + 'lr_sample.npy')[:, :3, ...] * lr_std
-hr_sample = np.load(samples_dir + 'hr_sample.npy')[:, :3, ...] * hr_std
+training_summary_stats = np.load(
+    data_dir + 'normalisation.npy', allow_pickle=True
+).item()
+lr_std = training_summary_stats['LR_disp_fields_std']
+hr_std = training_summary_stats['HR_disp_fields_std']
 
-# TODO: read this from metadata
-box_size = 35.56187768431281
+lr_sample = np.load(samples_dir + 'lr_sample.npy')[:, :3, ...]
+hr_sample = np.load(samples_dir + 'hr_sample.npy')[:, :3, ...]
+
 
 for sr_sample in sr_samples:
     epoch = int(re.split(r'[._]+', sr_sample)[-2])
     sr_sample = np.load(sr_sample)[:, :3, ...] * hr_std
     
     plot_samples(
-        lr_sample, sr_sample, hr_sample, 
-        20*box_size/16, box_size, epoch,
+        lr_std * lr_sample, hr_std * sr_sample, hr_std * hr_sample, 
+        lr_std * LR_patch_length, hr_std * HR_patch_length, epoch,
         plots_dir
     )
