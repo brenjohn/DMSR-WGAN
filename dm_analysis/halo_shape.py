@@ -11,39 +11,6 @@ import numpy as np
 from numpy import linalg as la
 
 
-class Halo:
-    """A class to represent dark matter halos.
-    """
-    
-    def __init__(self, particle_ids, positions, mass):
-        self.particle_ids = particle_ids
-        self.positions = positions
-        self.num_particles = len(particle_ids)
-        self.mass = mass * self.num_particles
-        self.center()
-        
-    @classmethod
-    def from_halo_dict(cls, halo_dict, mass):
-        particle_ids = list(halo_dict.keys())
-        positions = np.stack(list(halo_dict.values()))
-        return cls(particle_ids, positions, mass)
-    
-    def center(self):
-        """Removes the mean position from all particle positions. 
-        """
-        self.positions -= self.positions.mean(axis=0)
-        
-    def move_to_box_centre(self, box_size, particle_id=0):
-        """Moves the given particle to the centre of the box. All other
-        particles are moved with it. This can be useful when a halo sits on the
-        boundary of a box with periodic bounary conditions so that members of
-        the halo appear on opposite sides of the box.
-        """
-        centre = np.asarray([box_size, box_size, box_size]) / 2
-        displacement = self.positions[particle_id] - centre
-        self.positions -= displacement
-
-
 def compute_shape_tensor(positions):
     """Computes the shape tensor from the given particle positions.
     """
