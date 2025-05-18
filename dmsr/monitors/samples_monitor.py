@@ -21,7 +21,7 @@ class SamplesMonitor(Monitor):
     
     def __init__(
             self,
-            generator,
+            gan,
             data_directory,
             patch_number,
             device,
@@ -32,7 +32,7 @@ class SamplesMonitor(Monitor):
         ):
         
         self.device = device
-        self.generator = generator
+        self.generator = gan.generator
         self.summary_stats = summary_stats
         
         lr_sample, hr_sample, style = self.get_sample(
@@ -43,7 +43,7 @@ class SamplesMonitor(Monitor):
         self.hr_sample = hr_sample
         self.style = style
         
-        z = generator.sample_latent_space(1, device)
+        z = self.generator.sample_latent_space(1, device)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = samples_dir

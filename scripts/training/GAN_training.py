@@ -30,7 +30,7 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = './test_run/'
+output_dir = './z_run/'
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -87,8 +87,8 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-# data_directory = '../../data/dmsr_style_train/'
-data_directory = '../../data/dmsr_style_valid/'
+data_directory = '../../data/dmsr_style_train/'
+# data_directory = '../../data/dmsr_style_valid/'
 batch_size = 8
 
 metadata = load_numpy_tensor(data_directory + 'metadata.npy')
@@ -155,7 +155,7 @@ gan.set_dataset(
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./velocity_run/checkpoints/current_model/')
+# gan.load('./z_run/checkpoints/current_model/')
 
 
 #=============================================================================#
@@ -171,22 +171,24 @@ monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
     'samples_monitor_1' : SamplesMonitor(
-        generator,
+        gan,
         valid_data_directory,
         patch_number     = 1,
         device           = device,
         include_velocity = True,
         include_style    = True,
+        summary_stats    = training_summary_stats,
         samples_dir      = output_dir + 'samples_1/'
     ),
     
     'samples_monitor_191' : SamplesMonitor(
-        generator,
+        gan,
         valid_data_directory,
         patch_number     = 191,
         device           = device,
         include_velocity = True,
         include_style    = True,
+        summary_stats    = training_summary_stats,
         samples_dir      = output_dir + 'samples_191/'
     ),
     
@@ -244,5 +246,5 @@ gan.set_monitor(monitor_manager)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 2
+num_epochs = 512
 gan.train(num_epochs)

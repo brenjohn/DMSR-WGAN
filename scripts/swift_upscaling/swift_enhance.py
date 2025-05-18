@@ -14,6 +14,7 @@ sys.path.append("..")
 sys.path.append("../..")
 
 import time
+import glob
 import torch
 import numpy as np
 
@@ -22,10 +23,9 @@ from swift_tools.enhance import enhance
 
 device = "cpu"
 print(f"Using device: {device}")
-ti = time.time()
 
 # Load the generator model.
-dmsr_model_dir = './dmsr_model_velocity_x64/'
+dmsr_model_dir = './dmsr_model/current_model/'
 generator = torch.load(dmsr_model_dir + 'generator.pth').to(device)
 
 # Load any scaling parameters if they exist.
@@ -36,10 +36,17 @@ if exists(scale_path):
     scale_params = {k : v.item() for k, v in scale_params.items()}
 
 # Specify paths to low-resolution snapshot and where to save enhanced snapshot. 
-data_dir = './swift_snapshots/'
-lr_snapshot = data_dir + '064/snap_0002.hdf5'
-sr_snapshot = lr_snapshot.replace('.hdf5', '_sr.hdf5')
+data_dir = './swift_snapshots/1Mpc/'
+lr_snapshots = data_dir + '064/snap_00[7-9][0-9].hdf5'
+lr_snapshots = np.sort(glob.glob(lr_snapshots))
 
-# Enhance the low-resolution snapshot
-enhance(lr_snapshot, sr_snapshot, generator, scale_params, device)
-print(f'Upscaling took {time.time() - ti}')
+z = generator.sample_latent_space(1, device)
+
+for lr_snapshot in lr_snapshots:
+    ti = time.time()
+    print('Upscaling', lr_snapshot)
+    sr_snapshot = lr_snapshot.replace('.hdf5', '_sr.hdf5')
+    
+    # Enhance the low-resolution snapshot
+    enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device)
+    print(f'Upscaling took {time.time() - ti}')
