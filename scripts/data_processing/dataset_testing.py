@@ -60,7 +60,7 @@ HR_disp_patches = [
 ]
 
 #%%
-for n in range(64):
+for n in range(len(LR_disp_patches)-64, len(LR_disp_patches)):
     LR_patch = LR_disp_patches[n]
     HR_patch = HR_disp_patches[n]
     a = scale_factors[n][0]
@@ -68,18 +68,37 @@ for n in range(64):
     LR_disp = np.load(LR_patch)[:, 2:18, 2:18, 2:18]
     HR_disp = np.load(HR_patch)
         
-    LR_positions = get_positions(LR_disp, a * box_size, 16) + box_size / 128
-    HR_positions = get_positions(HR_disp, a * box_size, 32) + box_size / 256
+    LR_positions = get_positions(LR_disp, a * box_size / 4, 16)
+    HR_positions = get_positions(HR_disp, a * box_size / 4, 32)
     
     print('Patch location', patch_location(n, 64, 4))
-    plt.scatter(HR_positions[0, ...], HR_positions[1, ...], s=0.2, alpha=0.4)
+    fig, axs = plt.subplots(1, 2, figsize=(16, 8))
+    axs[0].scatter(HR_positions[0, ...], HR_positions[1, ...], s=1, alpha=0.1)
     # plt.show()
     # plt.close()
     
-    plt.scatter(LR_positions[0, ...], LR_positions[1, ...], s=2, alpha=0.4)
+    axs[1].scatter(LR_positions[0, ...], LR_positions[1, ...], s=5, alpha=0.9)
     plt.title(f'Patch location {patch_location(n, 64, 4)}')
     plt.show()
     plt.close()
+    
+    
+#%%
+n = 49002
+LR_patch = LR_disp_patches[n]
+HR_patch = HR_disp_patches[n]
+a = scale_factors[n][0]
+
+LR_disp = np.load(LR_patch)[:, 2:18, 2:18, 2:18]
+HR_disp = np.load(HR_patch)
+    
+LR_positions = get_positions(LR_disp, a * box_size / 4, 16)
+HR_positions = get_positions(HR_disp, a * box_size / 4, 32)
+
+plt.scatter(HR_positions[0, ...], HR_positions[1, ...], s=1, alpha=0.9)
+plt.scatter(LR_positions[0, ...], LR_positions[1, ...], s=2, alpha=0.9)
+plt.show()
+plt.close()
 
 
 # LR_file = '../../data/dmsr_training/LR_fields.npy'

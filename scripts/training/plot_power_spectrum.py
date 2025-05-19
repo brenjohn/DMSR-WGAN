@@ -70,7 +70,7 @@ def plot_spectra(
 
 
 #%%
-data_dir = './test_run/'
+data_dir = './z_run/'
 plots_dir = data_dir + 'plots/spectra_191/'
 samples_dir = data_dir + 'samples_191/'
 sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')
@@ -104,7 +104,7 @@ hr_sample = np.load(samples_dir + 'hr_sample.npy')[:, :3, ...]
 
 for sr_sample in sr_samples:
     epoch = int(re.split(r'[._]+', sr_sample)[-2])
-    sr_sample = np.load(sr_sample)[:, :3, ...] * hr_std
+    sr_sample = np.load(sr_sample)[:, :3, ...]
     
     plot_spectra(
         lr_std * lr_sample, hr_std * sr_sample, hr_std * hr_sample,

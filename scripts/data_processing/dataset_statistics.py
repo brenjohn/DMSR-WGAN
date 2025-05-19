@@ -43,7 +43,7 @@ def compute_stats(patches):
     return mean, np.sqrt(variance)
 
 
-dataset_dir = '../../data/dmsr_style_train/'
+dataset_dir = '../../data/dmsr_style_valid/'
 fields = [
     'LR_disp_fields', 'HR_disp_fields', 'LR_vel_fields', 'HR_vel_fields'
 ]

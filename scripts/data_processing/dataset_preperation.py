@@ -55,8 +55,8 @@ def create_fields(
 # data_directory = '../../data/dmsr_runs/'
 data_directory = '/media/brennan/Leavitt_data/data/DM_SR/swift-sims/dmsr_z_runs_1Mpc/'
 
-LR_snapshots = np.sort(glob.glob(data_directory + 'run9/064/snap_*.hdf5'))
-HR_snapshots = np.sort(glob.glob(data_directory + 'run9/128/snap_*.hdf5'))
+LR_snapshots = np.sort(glob.glob(data_directory + 'run[1-8]/064/snap_*.hdf5'))
+HR_snapshots = np.sort(glob.glob(data_directory + 'run[1-8]/128/snap_*.hdf5'))
 
 num_snaps = len(LR_snapshots)
 
@@ -66,7 +66,7 @@ LR_patch_size = LR_inner_size + 2 * padding
 HR_patch_size = 32
 patches_per_snapshot = (64 // 16)**3
 
-output_dir = '../../data/dmsr_style_valid/'
+output_dir = '../../data/dmsr_style_train/'
 os.makedirs(output_dir, exist_ok=True)
 
 
