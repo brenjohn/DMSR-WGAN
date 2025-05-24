@@ -21,7 +21,7 @@ from swift_tools.friends_of_friends import friends_of_friends
 
 
 #%% Read in snapshot data.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
 sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
@@ -55,8 +55,8 @@ sr_halos = halo_masses(sr_positions, sr_box_size, sr_mass)
 #%% Compute and plot the number density.
 volume = (hr_box_size)**3 # volume in Mpc^3
 
-sr_halo_mass, sr_bin_edges = histogram(log10(sr_halos), bins=9)
-hr_halo_mass, hr_bin_edges = histogram(log10(hr_halos), bins=9)
+hr_halo_mass, hr_bin_edges = histogram(log10(hr_halos), bins=6)
+sr_halo_mass, sr_bin_edges = histogram(log10(sr_halos), bins=hr_bin_edges)
 lr_halo_mass, lr_bin_edges = histogram(log10(lr_halos), bins=hr_bin_edges)
 
 fig = plt.Figure(figsize=(7, 7))
@@ -74,9 +74,9 @@ plt.plot(bins, log10(sr_halo_mass/volume),
          linewidth=4, label='Super Resolution', zorder=2)
 
 plt.xticks([13, 13.5, 14, 14.5])
-plt.yticks([-6.0, -5.5, -5, -4.5, -4])
+plt.yticks([-6.0, -5.5, -5, -4.5, -4.0, -3.5])
 plt.xlim((12.95, 14.5))
-plt.ylim((-6.05, -3.8))
+plt.ylim((-5.6, -3.5))
 
 plt.tick_params(axis='both', which='major', labelsize=14)
 plt.xlabel(r'Halo Mass$ \quad [\log_{10} M_\odot]$', fontsize=16)
@@ -85,5 +85,53 @@ plt.legend(fontsize=14)
 plt.grid()
 plt.tight_layout()
 plt.savefig('halo_mass_function.png', dpi=210)
+plt.show()
+plt.close()
+
+
+#%% FOF mass function Comparison.
+
+fig, axes = plt.subplots(
+    2, 1, 
+    figsize=(6, 6), 
+    sharex=True, 
+    gridspec_kw={'hspace': 0, 'height_ratios': [2, 1]}
+)
+
+bins = (lr_bin_edges[:-1] + lr_bin_edges[1:])/2
+axes[0].plot(
+    bins, log10(lr_halo_mass/volume), linewidth=4, label='Low Resolution'
+)
+
+bins = (hr_bin_edges[:-1] + hr_bin_edges[1:])/2
+axes[0].plot(
+    bins, log10(hr_halo_mass/volume), linewidth=4, label='High Resolution'
+)
+
+bins = (sr_bin_edges[:-1] + sr_bin_edges[1:])/2
+axes[0].plot(
+    bins, log10(sr_halo_mass/volume), linewidth=4, label='Super Resolution'
+)
+
+axes[0].set_ylabel(r'Number Density$ \quad [\log_{10} $Mpc$^{-3}]$', fontsize=16)
+axes[0].legend(fontsize=14)
+axes[0].grid()
+axes[0].set_xticks([13, 13.5, 14, 14.5])
+axes[0].set_yticks([-5.5, -5, -4.5, -4.0, -3.5])
+axes[0].tick_params(axis='both', which='major', labelsize=14)
+
+bins = (hr_bin_edges[:-1] + hr_bin_edges[1:])/2
+axes[1].plot(bins, hr_halo_mass / lr_halo_mass, linewidth=4)
+axes[1].plot(bins, hr_halo_mass / hr_halo_mass, linewidth=4)
+axes[1].plot(bins, hr_halo_mass / sr_halo_mass, linewidth=4)
+axes[1].set_ylim(0.4, 7)
+axes[1].set_xlim(12.9, 14.5)
+axes[1].set_xlabel(r'Halo Mass$ \quad [\log_{10} M_\odot]$', fontsize=16)
+axes[1].set_ylabel(r'$N_{HR} / N$', fontsize=16)
+axes[1].set_yticks([1, 3, 5])
+axes[1].grid()
+axes[1].tick_params(axis='both', which='major', labelsize=14)
+plt.tight_layout()
+plt.savefig('halo_mass_function.png', dpi=300)
 plt.show()
 plt.close()

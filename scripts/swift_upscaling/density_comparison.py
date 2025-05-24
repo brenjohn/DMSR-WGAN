@@ -23,10 +23,10 @@ import matplotlib.patches as patches
 
 
 #%% Calculating Comological Volume Density Field.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
-sr_snapshot = data_dir + '064/snap_0002_sr.hdf5'
+sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 
 lr_positions, lr_grid_size, lr_box_size, h, _ = read_snapshot(lr_snapshot)
 hr_positions, hr_grid_size, hr_box_size, h, _ = read_snapshot(hr_snapshot)
@@ -71,7 +71,7 @@ axes[2].set_yticks([])
 
 box_color = 'white'
 rect = patches.Rectangle(
-    (0, 63-16), 16, 16, linewidth=4, edgecolor=box_color, facecolor='none'
+    (63-16, 63-16), 16, 16, linewidth=4, edgecolor=box_color, facecolor='none'
 )
 axes[0].add_patch(rect)
 axes[0].text(
@@ -86,7 +86,7 @@ axes[0].text(
 )
 
 rect = patches.Rectangle(
-    (0, 127-32), 32, 32, linewidth=4, edgecolor=box_color, facecolor='none'
+    (127-32, 127-32), 32, 32, linewidth=4, edgecolor=box_color, facecolor='none'
 )
 axes[1].add_patch(rect)
 axes[1].text(
@@ -101,7 +101,7 @@ axes[1].text(
 )
 
 rect = patches.Rectangle(
-    (0, 127-32), 32, 32, linewidth=4, edgecolor=box_color, facecolor='none'
+    (127-32, 127-32), 32, 32, linewidth=4, edgecolor=box_color, facecolor='none'
 )
 axes[2].add_patch(rect)
 axes[2].text(
@@ -123,9 +123,9 @@ plt.close()
 
 #%% Zoom in Density Comparison.
 # Note, lr particles are 8 times more massive than hr particles.
-lr_density_2D = np.sum(lr_density[:16, :16, :16], axis=-1) * 8
-hr_density_2D = np.sum(hr_density[:32, :32, :32], axis=-1)
-sr_density_2D = np.sum(sr_density[:32, :32, :32], axis=-1)
+lr_density_2D = np.sum(lr_density[48:, :16, :16], axis=-1) * 8
+hr_density_2D = np.sum(hr_density[96:, :32, :32], axis=-1)
+sr_density_2D = np.sum(sr_density[96:, :32, :32], axis=-1)
 
 lr_density_2D = np.log(lr_density_2D)
 hr_density_2D = np.log(hr_density_2D)

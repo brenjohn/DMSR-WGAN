@@ -22,7 +22,7 @@ from swift_tools.friends_of_friends import Halo, compute_shape
 
 
 #%% Read in snapshot HR and SR snapshots.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
 sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 
@@ -240,7 +240,7 @@ hr_kde = gaussian_kde(np.asarray(hr_bas))
 sr_kde = gaussian_kde(np.asarray(sr_bas))
 ax_bas.plot(xs, hr_kde(xs), color='red', linewidth=2)
 ax_bas.plot(xs, sr_kde(xs), color='blue', linewidth=2)
-ax_bas.set_ylim(0, 3)
+ax_bas.set_ylim(0, 3.4)
 ax_bas.set_yticks([0, 2])
 ax_bas.set_ylabel('b/a density', fontsize=21)
 ax_bas.tick_params(axis='x', labelsize=0)
@@ -253,7 +253,7 @@ hr_kde = gaussian_kde(np.asarray(hr_cas))
 sr_kde = gaussian_kde(np.asarray(sr_cas))
 ax_bas.plot(hr_kde(xs), xs, color='red', linewidth=2)
 ax_bas.plot(sr_kde(xs), xs, color='blue', linewidth=2)
-ax_bas.set_xlim(0, 3)
+ax_bas.set_xlim(0, 3.4)
 ax_bas.set_xlabel('c/a density', fontsize=21)
 ax_bas.tick_params(axis='x', labelsize=16)
 ax_bas.tick_params(axis='y', labelsize=0)

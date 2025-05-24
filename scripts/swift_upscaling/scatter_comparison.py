@@ -21,10 +21,10 @@ from swift_tools.data import read_snapshot
 
 
 #%% Calculating Comological Volume Density Field.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
-sr_snapshot = data_dir + '064/snap_0002_sr.hdf5'
+sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 
 lr_positions, lr_grid_size, lr_box_size, h, _ = read_snapshot(lr_snapshot)
 hr_positions, hr_grid_size, hr_box_size, h, _ = read_snapshot(hr_snapshot)
@@ -60,7 +60,7 @@ box_color = 'black'
 box_width = 32 * (100 / h) / 128
 
 rect = patches.Rectangle(
-    (1, 1), box_width, box_width, linewidth=4,
+    (3*box_width - 1, 1), box_width, box_width, linewidth=4,
     edgecolor=box_color, facecolor='none'
 )
 axes[0].add_patch(rect)
@@ -76,7 +76,7 @@ axes[0].text(
 )
 
 rect = patches.Rectangle(
-    (1, 1), box_width, box_width, linewidth=4,
+    (3*box_width - 1, 1), box_width, box_width, linewidth=4,
     edgecolor=box_color, facecolor='none'
 )
 axes[1].add_patch(rect)
@@ -92,7 +92,7 @@ axes[1].text(
 )
 
 rect = patches.Rectangle(
-    (1, 1), box_width, box_width, linewidth=4,
+    (3*box_width - 1, 1), box_width, box_width, linewidth=4,
     edgecolor=box_color, facecolor='none'
 )
 axes[2].add_patch(rect)
@@ -116,8 +116,8 @@ plt.close()
 #%% Zoom in Scatter Plots.
 upper = 32 * (100 / h) / 128
 lower = 0
-box_lower = np.asarray([lower, lower, lower])
-box_upper = np.asarray([upper, upper, upper])
+box_lower = np.asarray([3*upper, lower, lower])
+box_upper = np.asarray([4*upper, upper, upper])
 
 def get_box_positions(positions, box_lower, box_upper):
     particles_in_box = (box_lower < positions) * (positions < box_upper)
@@ -135,21 +135,21 @@ sr_xs, sr_ys = sr_box_positions[:, 0], sr_box_positions[:, 1]
 
 fig, axes = plt.subplots(1, 3, figsize=(21, 7))
 
-axes[0].scatter(lr_xs, lr_ys, s=0.2, alpha=0.5)
-axes[0].set_xlim(lower, upper)
-axes[0].set_ylim(lower, upper)
+axes[0].scatter(lr_xs, lr_ys, s=0.5, alpha=0.5)
+axes[0].set_xlim(box_lower[0], box_upper[0])
+axes[0].set_ylim(box_lower[1], box_upper[1])
 axes[0].set_xticks([])
 axes[0].set_yticks([])
 
 axes[1].scatter(hr_xs, hr_ys, s=0.2, alpha=0.5)
-axes[1].set_xlim(lower, upper)
-axes[1].set_ylim(lower, upper)
+axes[1].set_xlim(box_lower[0], box_upper[0])
+axes[1].set_ylim(box_lower[1], box_upper[1])
 axes[1].set_xticks([])
 axes[1].set_yticks([])
 
 axes[2].scatter(sr_xs, sr_ys, s=0.2, alpha=0.5)
-axes[2].set_xlim(lower, upper)
-axes[2].set_ylim(lower, upper)
+axes[2].set_xlim(box_lower[0], box_upper[0])
+axes[2].set_ylim(box_lower[1], box_upper[1])
 axes[2].set_xticks([])
 axes[2].set_yticks([])
 

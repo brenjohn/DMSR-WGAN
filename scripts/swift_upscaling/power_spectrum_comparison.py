@@ -22,10 +22,10 @@ from dmsr.analysis import power_spectrum
 
 
 #%% Calculating Comological Volume Density Field.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 lr_snapshot = data_dir + '064/snap_0002.hdf5'
 hr_snapshot = data_dir + '128/snap_0002.hdf5'
-sr_snapshot = data_dir + '064/snap_0002_sr.hdf5'
+sr_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 
 lr_positions, lr_grid_size, lr_box_size, h, _ = read_snapshot(lr_snapshot)
 hr_positions, hr_grid_size, hr_box_size, h, _ = read_snapshot(hr_snapshot)

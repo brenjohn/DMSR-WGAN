@@ -21,7 +21,7 @@ from swift_tools.data import read_snapshot
 
 
 #%% Calculating Density Field.
-data_dir = './swift_snapshots/'
+data_dir = './swift_snapshots/test_set/'
 l0_snapshot = data_dir + '064/snap_0002_sr_level_0.hdf5'
 l1_snapshot = data_dir + '064/snap_0002_sr_level_1.hdf5'
 l2_snapshot = data_dir + '064/snap_0002_sr_level_2.hdf5'
@@ -36,9 +36,9 @@ l2_density = cloud_in_cells(l2_positions, l2_grid_size, l2_box_size)
 
 
 #%% Zoom in Density Comparison.
-l0_density_2D = np.sum(l0_density[:32, :32, :32], axis=-1)
-l1_density_2D = np.sum(l1_density[:32, :32, :32], axis=-1)
-l2_density_2D = np.sum(l2_density[:32, :32, :32], axis=-1)
+l0_density_2D = np.sum(l0_density[96:, :32, :32], axis=-1)
+l1_density_2D = np.sum(l1_density[96:, :32, :32], axis=-1)
+l2_density_2D = np.sum(l2_density[96:, :32, :32], axis=-1)
 
 l0_density_2D = np.log(l0_density_2D)
 l1_density_2D = np.log(l1_density_2D)
@@ -59,7 +59,7 @@ axes[0].imshow(l0_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[0].set_xticks([])
 axes[0].set_yticks([])
 axes[0].text(
-    x=0.5,
+    x=17.8,
     y=2,
     s='0 layers',
     color='white',
@@ -72,7 +72,7 @@ axes[1].imshow(l1_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[1].set_xticks([])
 axes[1].set_yticks([])
 axes[1].text(
-    x=0.5,
+    x=17.8,
     y=2,
     s='1 layers',
     color='white',
@@ -85,7 +85,7 @@ axes[2].imshow(l2_density_2D, cmap=cmap, vmin=vmin, vmax=vmax)
 axes[2].set_xticks([])
 axes[2].set_yticks([])
 axes[2].text(
-    x=0.5,
+    x=17.8,
     y=2,
     s='2 layers',
     color='white',
@@ -103,8 +103,8 @@ plt.close()
 #%% Zoom in Scatter Plots.
 upper = 32 * (100 / h) / 128
 lower = 0
-box_lower = np.asarray([lower, lower, lower])
-box_upper = np.asarray([upper, upper, upper])
+box_lower = np.asarray([3*upper, lower, lower])
+box_upper = np.asarray([4*upper, upper, upper])
 
 def get_box_positions(positions, box_lower, box_upper):
     particles_in_box = (box_lower < positions) * (positions < box_upper)
@@ -123,12 +123,12 @@ l2_xs, l2_ys = l2_box_positions[:, 0], l2_box_positions[:, 1]
 fig, axes = plt.subplots(1, 3, figsize=(21, 7))
 
 axes[0].scatter(l0_xs, l0_ys, s=0.2, alpha=0.5)
-axes[0].set_xlim(lower, upper)
-axes[0].set_ylim(lower, upper)
+axes[0].set_xlim(box_lower[0], box_upper[0])
+axes[0].set_ylim(box_lower[1], box_upper[1])
 axes[0].set_xticks([])
 axes[0].set_yticks([])
 axes[0].text(
-    x=1,
+    x=21 + box_lower[0],
     y=33,
     s='0 layers',
     color='black',
@@ -138,12 +138,12 @@ axes[0].text(
 )
 
 axes[1].scatter(l1_xs, l1_ys, s=0.2, alpha=0.5)
-axes[1].set_xlim(lower, upper)
-axes[1].set_ylim(lower, upper)
+axes[1].set_xlim(box_lower[0], box_upper[0])
+axes[1].set_ylim(box_lower[1], box_upper[1])
 axes[1].set_xticks([])
 axes[1].set_yticks([])
 axes[1].text(
-    x=1,
+    x=21 + box_lower[0],
     y=33,
     s='1 layers',
     color='black',
@@ -153,12 +153,12 @@ axes[1].text(
 )
 
 axes[2].scatter(l2_xs, l2_ys, s=0.2, alpha=0.5)
-axes[2].set_xlim(lower, upper)
-axes[2].set_ylim(lower, upper)
+axes[2].set_xlim(box_lower[0], box_upper[0])
+axes[2].set_ylim(box_lower[1], box_upper[1])
 axes[2].set_xticks([])
 axes[2].set_yticks([])
 axes[2].text(
-    x=1,
+    x=21 + box_lower[0],
     y=33,
     s='2 layers',
     color='black',
