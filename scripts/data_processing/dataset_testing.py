@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from swift_tools.fields import get_positions
-from dmsr.field_operations.augmentation import random_transformation
+from dmsr.data_tools import random_transformation
 
 
 def patch_location(n, patches_per_snapshot, patches_per_dim):
@@ -45,6 +45,14 @@ padding         = metadata[6]
 LR_mass         = metadata[7]
 HR_mass         = metadata[8]
 
+training_summary_stats = np.load(
+    dataset_dir + 'summary_stats.npy', allow_pickle=True
+).item()
+
+lr_std = training_summary_stats['LR_disp_fields_std']
+hr_std = training_summary_stats['HR_disp_fields_std']
+
+
 #%%
 field_dir = dataset_dir + fields[0] + '/'
 
@@ -65,38 +73,46 @@ for n in range(len(LR_disp_patches)-64, len(LR_disp_patches)):
     HR_patch = HR_disp_patches[n]
     a = scale_factors[n][0]
     
-    LR_disp = np.load(LR_patch)[:, 2:18, 2:18, 2:18]
+    s = int(padding)
+    f = int(LR_patch_size - padding)
+    LR_disp = np.load(LR_patch)[:, s:f, s:f, s:f]
     HR_disp = np.load(HR_patch)
         
-    LR_positions = get_positions(LR_disp, a * box_size / 4, 16)
-    HR_positions = get_positions(HR_disp, a * box_size / 4, 32)
+    LR_positions = get_positions(LR_disp, LR_patch_length, 16)
+    HR_positions = get_positions(HR_disp, HR_patch_length, 32)
     
     print('Patch location', patch_location(n, 64, 4))
     fig, axs = plt.subplots(1, 2, figsize=(16, 8))
     axs[0].scatter(HR_positions[0, ...], HR_positions[1, ...], s=1, alpha=0.1)
+    axs[0].set_xlim(0, HR_patch_length)
+    axs[0].set_ylim(0, HR_patch_length)
     # plt.show()
     # plt.close()
     
     axs[1].scatter(LR_positions[0, ...], LR_positions[1, ...], s=5, alpha=0.9)
+    axs[1].set_xlim(0, HR_patch_length)
+    axs[1].set_ylim(0, HR_patch_length)
     plt.title(f'Patch location {patch_location(n, 64, 4)}')
     plt.show()
     plt.close()
     
     
 #%%
-n = 49002
+n = 48619
 LR_patch = LR_disp_patches[n]
 HR_patch = HR_disp_patches[n]
 a = scale_factors[n][0]
 
-LR_disp = np.load(LR_patch)[:, 2:18, 2:18, 2:18]
+LR_disp = np.load(LR_patch)
 HR_disp = np.load(HR_patch)
-    
-LR_positions = get_positions(LR_disp, a * box_size / 4, 16)
-HR_positions = get_positions(HR_disp, a * box_size / 4, 32)
 
-plt.scatter(HR_positions[0, ...], HR_positions[1, ...], s=1, alpha=0.9)
-plt.scatter(LR_positions[0, ...], LR_positions[1, ...], s=2, alpha=0.9)
+LR_positions = get_positions(LR_disp, LR_patch_length, LR_patch_size)
+HR_positions = get_positions(HR_disp, HR_patch_length, HR_patch_size)
+
+LR_positions -= padding * LR_patch_length / LR_patch_size
+
+plt.scatter(HR_positions[0, ...], HR_positions[1, ...], s=1, alpha=0.1)
+plt.scatter(LR_positions[0, ...], LR_positions[1, ...], s=0.2, alpha=0.9)
 plt.show()
 plt.close()
 
