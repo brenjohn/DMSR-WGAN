@@ -14,7 +14,9 @@ from torch import concat, rand, autograd
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 from ..field_analysis import cic_density_field
+from ..field_analysis import nn_distance_field
 from ..data_tools import pixel_unshuffle
+from ..data_tools import crop
 
 
 class DMSRCritic(nn.Module):
@@ -31,6 +33,7 @@ class DMSRCritic(nn.Module):
             base_channels,
             density_scale_factor = None,
             style_size = None,
+            use_nn_distance_features = False,
             **kwargs
         ):
         super().__init__()
@@ -38,12 +41,15 @@ class DMSRCritic(nn.Module):
         self.input_channels = input_channels
         self.base_channels = base_channels
         self.style_size = style_size
+        self.use_nn_distance_features = use_nn_distance_features
         self.build_critic_components()
         
         if density_scale_factor is not None:
             self.density_scale = density_scale_factor
             self.density_size = density_scale_factor * input_size
             self.prepare_batch = self.prepare_batch_hr
+        elif use_nn_distance_features:
+            self.prepare_batch = self.prepare_batch_nn
         else:
             self.prepare_batch = self.prepare_batch_lr_hr
     
@@ -158,6 +164,22 @@ class DMSRCritic(nn.Module):
         hr_density = cic_density_field(hr_particles, box_size, density_size)
         hr_density = pixel_unshuffle(hr_density, scale)
         return concat((hr_density, hr_batch, lr_batch), dim=1),
+    
+    
+    def prepare_batch_nn(self, hr_batch, lr_batch, box_size):
+        """Prepare input data for the critic.
+        
+        Displacement coordinates are assumed to be contained in the first three
+        channels of the given high- and low-resolution data.
+        """
+        hr_particles = hr_batch[:, :3, :, :, :]
+        hr_density = cic_density_field(
+            hr_particles, box_size, self.input_size + 2
+        )
+        all_fields = concat((hr_density, hr_batch, lr_batch), dim=1)
+        all_fields = crop(all_fields, 1)
+        nn_distance = nn_distance_field(hr_particles, box_size)
+        return concat((nn_distance, all_fields), dim=1),
     
     
     def gradient_penalty(

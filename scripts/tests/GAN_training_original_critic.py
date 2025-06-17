@@ -169,7 +169,7 @@ monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
     'samples_monitor' : SamplesMonitor(
-        generator,
+        gan,
         valid_data_directory,
         patch_number     = 1,
         device           = device,
@@ -188,6 +188,7 @@ monitors = {
         spectra_data,
         HR_patch_length,
         HR_patch_size,
+        HR_mass,
         training_summary_stats,
         device,
         checkpoint_dir = checkpoint_dir
