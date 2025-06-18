@@ -70,7 +70,7 @@ def plot_spectra(
 
 
 #%%
-data_dir = './z_run/'
+data_dir = './nn_run/'
 plots_dir = data_dir + 'plots/spectra_191/'
 samples_dir = data_dir + 'samples_191/'
 sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')

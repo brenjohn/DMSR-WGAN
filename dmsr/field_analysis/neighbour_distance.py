@@ -12,7 +12,8 @@ from .cloud_in_cells import displacements_to_positions
 
 
 def nn_distance_field(displacements, box_size):
-    """
+    """Returns a tensor with 6 channels, each containing the distance of each
+    particle from one of its six neighbours.
     """
     positions = displacements_to_positions(displacements, box_size)
     
