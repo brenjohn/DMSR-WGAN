@@ -179,6 +179,7 @@ class DMSRCritic(nn.Module):
         all_fields = concat((hr_density, hr_batch, lr_batch), dim=1)
         all_fields = crop(all_fields, 1)
         nn_distance = nn_distance_field(hr_particles, box_size)
+        nn_distance = -1 / (nn_distance + 0.01)
         return concat((nn_distance, all_fields), dim=1),
     
     

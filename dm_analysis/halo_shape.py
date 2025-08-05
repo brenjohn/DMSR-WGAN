@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat May  3 14:22:21 2025
+Created on Thu Apr  3 23:31:43 2025
 
-@author: brennan
+@author: john
+
+This script was used to create figure 7 of Brennan et. al. 2025 "On the Use of
+WGANs for Super Resolution in Dark-Matter Simulations".
 """
 
 import numpy as np
