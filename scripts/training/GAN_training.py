@@ -30,7 +30,7 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = './z_run/'
+output_dir = './nn_run/'
 os.makedirs(output_dir, exist_ok=True)
 
 

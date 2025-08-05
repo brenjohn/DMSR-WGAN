@@ -9,7 +9,7 @@ Created on Thu Sep 26 18:06:39 2024
 import numpy as np
 import matplotlib.pyplot as plt
 
-losses = np.load('./z_run/losses.npz')
+losses = np.load('./nn_run/losses.npz')
 
 critic_loss = losses['critic_loss']
 critic_batches = losses['critic_batches']
