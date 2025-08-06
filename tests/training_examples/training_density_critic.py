@@ -7,18 +7,14 @@ Created on Fri Sep 13 11:35:32 2024
 """
 
 import os
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import torch
 import numpy as np
+import torch.optim as optim
 
-from torch import optim
 from torch.utils.data import DataLoader
 
 from dmsr.wgan import DMSRWGAN
-from dmsr.wgan import DMSRCritic
+from dmsr.wgan import DMSRDensityCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import PatchDataSet
@@ -31,7 +27,7 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = './velocity_run/'
+output_dir = './test_run/'
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -39,8 +35,8 @@ os.makedirs(output_dir, exist_ok=True)
 #                      Generator and Critic Models
 #=============================================================================#
 lr_grid_size   = 20
-input_channels = 6
-base_channels  = 64 
+input_channels = 3
+base_channels  = 16 
 crop_size      = 2
 scale_factor   = 2
 
@@ -49,12 +45,13 @@ generator = DMSRGenerator(
 )
 
 hr_grid_size      = generator.output_size
-critic_input_size = hr_grid_size
-input_channels    = 20
-base_channels     = 64
+density_size      = hr_grid_size
+displacement_size = hr_grid_size
+density_channels  = 4
+main_channels     = 16
 
-critic = DMSRCritic(
-    critic_input_size, input_channels, base_channels, 2
+critic = DMSRDensityCritic(
+    density_size, displacement_size, density_channels, main_channels
 )
 
 generator.to(device)
@@ -84,7 +81,7 @@ generate_mock_dataset(
     lr_grid_size       = lr_grid_size,
     hr_grid_size       = hr_grid_size,
     lr_padding         = generator.padding,
-    include_velocities = True, 
+    include_velocities = False, 
     include_scales     = False,
     include_spectra    = False
 )
@@ -109,8 +106,6 @@ np.save(output_dir + 'normalisation.npy', training_summary_stats)
 dataset = PatchDataSet(
     lr_position_dir   = data_directory + 'LR_disp_fields/',
     hr_position_dir   = data_directory + 'HR_disp_fields/',
-    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
-    hr_velocity_dir   = data_directory + 'HR_vel_fields/',
     summary_stats     = training_summary_stats,
     augment=True
 )
@@ -123,6 +118,12 @@ dataloader = DataLoader(
 #=============================================================================#
 #                           Validation Dataset
 #=============================================================================#
+# data_directory = 'path/to/validation/data/directory'
+# data = load_numpy_dataset(data_directory)
+
+# data = generate_mock_data(lr_grid_size, hr_grid_size, channels=3, samples=8)
+# LR_data, HR_data = data
+
 from dmsr.data_tools import SpectraDataset
 
 valid_data_directory = './data/test_valid/'
@@ -132,7 +133,7 @@ generate_mock_dataset(
     lr_grid_size       = LR_patch_size,
     hr_grid_size       = HR_patch_size,
     lr_padding         = padding,
-    include_velocities = True, 
+    include_velocities = False, 
     include_scales     = False,
     include_spectra    = True
 )
@@ -140,10 +141,8 @@ generate_mock_dataset(
 spectra_data = SpectraDataset(
     lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
     hr_spectrum_dir   = valid_data_directory + 'HR_spectra/',
-    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
     summary_stats     = training_summary_stats,
 )
-
 
 #=============================================================================#
 #                              DMSR WGAN
@@ -166,19 +165,17 @@ from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
 from dmsr.monitors import SpectrumMonitor
 
-
 checkpoint_dir = output_dir + 'checkpoints/'
-samples_dir    = output_dir + 'samples/'
 
 monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
     'samples_monitor' : SamplesMonitor(
-        generator,
+        gan,
         valid_data_directory,
         patch_number     = 1,
         device           = device,
-        include_velocity = True,
+        include_velocity = False,
         include_style    = False,
         samples_dir      = output_dir + 'samples/'
     ),
@@ -193,13 +190,15 @@ monitors = {
         spectra_data,
         HR_patch_length,
         HR_patch_size,
+        HR_mass,
         training_summary_stats,
         device,
         checkpoint_dir = checkpoint_dir
     )
 }
 
-batch_report_rate = 2
+
+batch_report_rate = 1
 monitor_manager = MonitorManager(batch_report_rate, device)
 monitor_manager.set_monitors(monitors)
 gan.set_monitor(monitor_manager)

@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 13 11:35:32 2024
+Created on Tue Jun 17 17:30:53 2025
 
 @author: brennan
 """
 
 import os
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import torch
 import numpy as np
-import torch.optim as optim
 
+from torch import optim
 from torch.utils.data import DataLoader
 
 from dmsr.wgan import DMSRWGAN
-from dmsr.wgan import DMSRDensityCritic
+from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import PatchDataSet
@@ -39,23 +35,32 @@ os.makedirs(output_dir, exist_ok=True)
 #                      Generator and Critic Models
 #=============================================================================#
 lr_grid_size   = 20
-input_channels = 3
-base_channels  = 16 
+input_channels = 6
+base_channels  = 16
 crop_size      = 2
-scale_factor   = 2
+upscale_factor = 2
+style_size     = 1
 
 generator = DMSRGenerator(
-    lr_grid_size, input_channels, base_channels, crop_size, scale_factor
+    lr_grid_size, 
+    input_channels, 
+    base_channels, 
+    crop_size, 
+    upscale_factor, 
+    style_size
 )
 
-hr_grid_size      = generator.output_size
-density_size      = hr_grid_size
-displacement_size = hr_grid_size
-density_channels  = 4
-main_channels     = 16
+hr_grid_size         = generator.output_size
+critic_input_size    = hr_grid_size - 2
+input_channels       = 3 + 3 + 3 + 3 + 6 + 1
+base_channels        = 16
 
-critic = DMSRDensityCritic(
-    density_size, displacement_size, density_channels, main_channels
+critic = DMSRCritic(
+    critic_input_size, 
+    input_channels, 
+    base_channels,
+    style_size = style_size,
+    use_nn_distance_features = True
 )
 
 generator.to(device)
@@ -79,17 +84,19 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #                           Training Dataset
 #=============================================================================#
 data_directory = './data/test_train/'
+
+# Create a mock dataset in the specified data directory
 generate_mock_dataset(
     data_dir           = data_directory, 
     num_patches        = 16,
     lr_grid_size       = lr_grid_size,
     hr_grid_size       = hr_grid_size,
     lr_padding         = generator.padding,
-    include_velocities = False, 
-    include_scales     = False,
+    include_velocities = True, 
+    include_scales     = True,
     include_spectra    = False
 )
-batch_size = 2
+batch_size = 4
 
 metadata = load_numpy_tensor(data_directory + 'metadata.npy')
 box_size        = metadata[0].item()
@@ -109,44 +116,51 @@ np.save(output_dir + 'normalisation.npy', training_summary_stats)
 
 dataset = PatchDataSet(
     lr_position_dir   = data_directory + 'LR_disp_fields/',
-    hr_position_dir   = data_directory + 'HR_disp_fields/',
+    hr_position_dir   = data_directory + 'HR_disp_fields/', 
+    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
+    hr_velocity_dir   = data_directory + 'HR_vel_fields/', 
+    scale_factor_file = data_directory + 'scale_factors.npy',
     summary_stats     = training_summary_stats,
     augment=True
 )
 
 dataloader = DataLoader(
-    dataset, batch_size=batch_size, shuffle=True, drop_last=True
+    dataset, 
+    batch_size=batch_size, 
+    shuffle=True, 
+    drop_last=True,
+    num_workers=2,
+    prefetch_factor=8
 )
 
 
 #=============================================================================#
 #                           Validation Dataset
 #=============================================================================#
-# data_directory = 'path/to/validation/data/directory'
-# data = load_numpy_dataset(data_directory)
-
-# data = generate_mock_data(lr_grid_size, hr_grid_size, channels=3, samples=8)
-# LR_data, HR_data = data
-
 from dmsr.data_tools import SpectraDataset
 
 valid_data_directory = './data/test_valid/'
+
+# Create a mock dataset in the validation data directory
 generate_mock_dataset(
     data_dir           = valid_data_directory, 
     num_patches        = 4,
     lr_grid_size       = LR_patch_size,
     hr_grid_size       = HR_patch_size,
     lr_padding         = padding,
-    include_velocities = False, 
-    include_scales     = False,
+    include_velocities = True, 
+    include_scales     = True,
     include_spectra    = True
 )
 
 spectra_data = SpectraDataset(
     lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
-    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/',
+    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/', 
+    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
+    scale_factor_file = valid_data_directory + 'scale_factors.npy',
     summary_stats     = training_summary_stats,
 )
+
 
 #=============================================================================#
 #                              DMSR WGAN
@@ -159,11 +173,11 @@ gan.set_dataset(
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./level_0_run/checkpoints/current_model/')
+# gan.load('./velocity_run/checkpoints/current_model/')
 
 
 #=============================================================================#
-#                               Monitor
+#                               Monitors
 #=============================================================================#
 from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
@@ -174,14 +188,26 @@ checkpoint_dir = output_dir + 'checkpoints/'
 monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
-    'samples_monitor' : SamplesMonitor(
-        generator,
+    'samples_monitor_1' : SamplesMonitor(
+        gan,
         valid_data_directory,
         patch_number     = 1,
         device           = device,
-        include_velocity = False,
-        include_style    = False,
-        samples_dir      = output_dir + 'samples/'
+        include_velocity = True,
+        include_style    = True,
+        summary_stats    = training_summary_stats,
+        samples_dir      = output_dir + 'samples_1/'
+    ),
+    
+    'samples_monitor_3' : SamplesMonitor(
+        gan,
+        valid_data_directory,
+        patch_number     = 3,
+        device           = device,
+        include_velocity = True,
+        include_style    = True,
+        summary_stats    = training_summary_stats,
+        samples_dir      = output_dir + 'samples_1/'
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
@@ -194,6 +220,7 @@ monitors = {
         spectra_data,
         HR_patch_length,
         HR_patch_size,
+        HR_mass,
         training_summary_stats,
         device,
         checkpoint_dir = checkpoint_dir
@@ -201,7 +228,7 @@ monitors = {
 }
 
 
-batch_report_rate = 1
+batch_report_rate = 16
 monitor_manager = MonitorManager(batch_report_rate, device)
 monitor_manager.set_monitors(monitors)
 gan.set_monitor(monitor_manager)
@@ -222,20 +249,20 @@ gan.set_monitor(monitor_manager)
 
 # validator = SupervisedMonitor(generator, valid_dataloader, device)
 
-supervised_epochs = 1
-gan.train(
-    supervised_epochs, 
-    train_step = gan.generator_supervised_step
-)
-gan.train(
-    supervised_epochs, 
-    train_step = gan.critic_supervised_step
-)
+# supervised_epochs = 5
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.generator_supervised_step
+# )
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.critic_supervised_step
+# )
 
 
 #=============================================================================#
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1
+num_epochs = 2
 gan.train(num_epochs)

@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Mar  6 18:53:01 2025
+Created on Fri Sep 13 11:35:32 2024
 
 @author: brennan
 """
 
 import os
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import torch
+import torch.optim as optim
 import numpy as np
 
-from torch import optim
 from torch.utils.data import DataLoader
 
 from dmsr.wgan import DMSRWGAN
@@ -39,33 +35,22 @@ os.makedirs(output_dir, exist_ok=True)
 #                      Generator and Critic Models
 #=============================================================================#
 lr_grid_size   = 20
-input_channels = 6
-base_channels  = 64 
+input_channels = 3
+base_channels  = 16 
 crop_size      = 2
 scale_factor   = 2
-style_size     = 1
 
 generator = DMSRGenerator(
-    lr_grid_size, 
-    input_channels, 
-    base_channels, 
-    crop_size, 
-    scale_factor, 
-    style_size
+    lr_grid_size, input_channels, base_channels, crop_size, scale_factor
 )
 
-hr_grid_size         = generator.output_size
-critic_input_size    = hr_grid_size
-input_channels       = 20
-base_channels        = 64
-density_scale_factor = 2
+hr_grid_size      = generator.output_size
+critic_input_size = hr_grid_size
+input_channels    = 8
+base_channels     = 16
 
 critic = DMSRCritic(
-    critic_input_size, 
-    input_channels, 
-    base_channels, 
-    density_scale_factor, 
-    style_size
+    critic_input_size, input_channels, base_channels
 )
 
 generator.to(device)
@@ -95,11 +80,11 @@ generate_mock_dataset(
     lr_grid_size       = lr_grid_size,
     hr_grid_size       = hr_grid_size,
     lr_padding         = generator.padding,
-    include_velocities = True, 
-    include_scales     = True,
+    include_velocities = False, 
+    include_scales     = False,
     include_spectra    = False
 )
-batch_size = 4
+batch_size = 2
 
 metadata = load_numpy_tensor(data_directory + 'metadata.npy')
 box_size        = metadata[0].item()
@@ -119,19 +104,13 @@ np.save(output_dir + 'normalisation.npy', training_summary_stats)
 
 dataset = PatchDataSet(
     lr_position_dir   = data_directory + 'LR_disp_fields/',
-    hr_position_dir   = data_directory + 'HR_disp_fields/', 
-    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
-    hr_velocity_dir   = data_directory + 'HR_vel_fields/', 
-    scale_factor_file = data_directory + 'scale_factors.npy',
+    hr_position_dir   = data_directory + 'HR_disp_fields/',
     summary_stats     = training_summary_stats,
     augment=True
 )
 
 dataloader = DataLoader(
-    dataset, 
-    batch_size=batch_size, 
-    shuffle=True, 
-    drop_last=True
+    dataset, batch_size=batch_size, shuffle=True, drop_last=True
 )
 
 
@@ -147,16 +126,14 @@ generate_mock_dataset(
     lr_grid_size       = LR_patch_size,
     hr_grid_size       = HR_patch_size,
     lr_padding         = padding,
-    include_velocities = True, 
-    include_scales     = True,
+    include_velocities = True,
+    include_scales     = False,
     include_spectra    = True
 )
 
 spectra_data = SpectraDataset(
     lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
-    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/', 
-    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
-    scale_factor_file = valid_data_directory + 'scale_factors.npy',
+    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/',
     summary_stats     = training_summary_stats,
 )
 
@@ -192,8 +169,8 @@ monitors = {
         valid_data_directory,
         patch_number     = 1,
         device           = device,
-        include_velocity = True,
-        include_style    = True,
+        include_velocity = False,
+        include_style    = False,
         samples_dir      = output_dir + 'samples/'
     ),
     
