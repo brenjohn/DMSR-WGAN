@@ -10,7 +10,7 @@ import numpy as np
 import networkx as nx
 
 from scipy.spatial import KDTree
-from scipy.sparse import coo_array, csr_matrix
+from scipy.sparse import coo_array
 from scipy.sparse.csgraph import minimum_spanning_tree
 
 

@@ -8,6 +8,7 @@ Created on Fri Mar 14 14:26:04 2025
 
 import numpy as np
 
+from pathlib import Path
 from .monitor import Monitor
 
 
@@ -16,7 +17,7 @@ class LossMonitor(Monitor):
     models during WGAN training.
     """
     
-    def __init__(self, data_dir='./data/'):
+    def __init__(self, data_dir = Path('./data/')):
         self.data_dir = data_dir
         
         self.critic_loss       = []
@@ -73,7 +74,7 @@ class LossMonitor(Monitor):
     
     
     def save_losses(self):
-        filename = self.data_dir + 'losses.npz'
+        filename = self.data_dir / 'losses.npz'
         np.savez(filename, **{
             'critic_loss'       : self.critic_loss,
             'critic_batches'    : self.critic_batches,

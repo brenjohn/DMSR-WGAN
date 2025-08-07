@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Mar  6 18:53:01 2025
+Created on Sun Apr 13 13:18:38 2025
 
 @author: brennan
 """
 
-import os
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import torch
 import numpy as np
 
+from pathlib import Path
 from torch import optim
 from torch.utils.data import DataLoader
 
@@ -31,8 +27,8 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = './test_run/'
-os.makedirs(output_dir, exist_ok=True)
+output_dir = Path('./test_run/')
+output_dir.mkdir(exist_ok=True)
 
 
 #=============================================================================#
@@ -40,9 +36,9 @@ os.makedirs(output_dir, exist_ok=True)
 #=============================================================================#
 lr_grid_size   = 20
 input_channels = 6
-base_channels  = 64 
+base_channels  = 16
 crop_size      = 2
-scale_factor   = 2
+upscale_factor = 2
 style_size     = 1
 
 generator = DMSRGenerator(
@@ -50,14 +46,14 @@ generator = DMSRGenerator(
     input_channels, 
     base_channels, 
     crop_size, 
-    scale_factor, 
+    upscale_factor, 
     style_size
 )
 
 hr_grid_size         = generator.output_size
 critic_input_size    = hr_grid_size
 input_channels       = 20
-base_channels        = 64
+base_channels        = 16
 density_scale_factor = 2
 
 critic = DMSRCritic(
@@ -88,50 +84,54 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = './data/test_train/'
+data_directory = Path('./data/test_train/')
+
+# Create a mock dataset in the specified data directory
 generate_mock_dataset(
     data_dir           = data_directory, 
     num_patches        = 16,
     lr_grid_size       = lr_grid_size,
     hr_grid_size       = hr_grid_size,
     lr_padding         = generator.padding,
+    hr_padding         = 0,
     include_velocities = True, 
     include_scales     = True,
     include_spectra    = False
 )
 batch_size = 4
 
-metadata = load_numpy_tensor(data_directory + 'metadata.npy')
-box_size        = metadata[0].item()
-LR_patch_length = metadata[1].item()
-HR_patch_length = metadata[2].item()
-LR_patch_size   = metadata[3].int().item()
-HR_patch_size   = metadata[4].int().item()
-LR_inner_size   = metadata[5].int().item()
-padding         = metadata[6].int().item()
-LR_mass         = metadata[7].item()
-HR_mass         = metadata[8].item()
+metadata = np.load(data_directory / 'metadata.npy', allow_pickle=True).item()
+box_size        = metadata['box_size']
+LR_patch_length = metadata['LR_patch_length']
+HR_patch_length = metadata['HR_patch_length']
+LR_patch_size   = metadata['LR_patch_size']
+HR_patch_size   = metadata['HR_patch_size']
+LR_inner_size   = metadata['LR_inner_size']
+LR_padding      = metadata['LR_padding']
+HR_padding      = metadata['HR_padding']
+LR_mass         = metadata['LR_mass']
+HR_mass         = metadata['HR_mass']
 
 training_summary_stats = np.load(
-    data_directory + 'summary_stats.npy', allow_pickle=True
+    data_directory / 'summary_stats.npy', allow_pickle=True
 ).item()
-np.save(output_dir + 'normalisation.npy', training_summary_stats)
+np.save(output_dir / 'normalisation.npy', training_summary_stats)
 
 dataset = PatchDataSet(
-    lr_position_dir   = data_directory + 'LR_disp_fields/',
-    hr_position_dir   = data_directory + 'HR_disp_fields/', 
-    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
-    hr_velocity_dir   = data_directory + 'HR_vel_fields/', 
-    scale_factor_file = data_directory + 'scale_factors.npy',
-    summary_stats     = training_summary_stats,
-    augment=True
+    data_dir              = data_directory,
+    include_velocities    = True,
+    include_scale_factors = True,
+    summary_stats         = training_summary_stats,
+    augment               = True
 )
 
 dataloader = DataLoader(
     dataset, 
     batch_size=batch_size, 
     shuffle=True, 
-    drop_last=True
+    drop_last=True,
+    num_workers=2,
+    prefetch_factor=8
 )
 
 
@@ -140,24 +140,26 @@ dataloader = DataLoader(
 #=============================================================================#
 from dmsr.data_tools import SpectraDataset
 
-valid_data_directory = './data/test_valid/'
+valid_data_directory = Path('./data/test_valid/')
+
+# Create a mock dataset in the validation data directory
 generate_mock_dataset(
     data_dir           = valid_data_directory, 
     num_patches        = 4,
     lr_grid_size       = LR_patch_size,
     hr_grid_size       = HR_patch_size,
-    lr_padding         = padding,
+    lr_padding         = LR_padding,
+    hr_padding         = 0,
     include_velocities = True, 
     include_scales     = True,
     include_spectra    = True
 )
 
 spectra_data = SpectraDataset(
-    lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
-    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/', 
-    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
-    scale_factor_file = valid_data_directory + 'scale_factors.npy',
-    summary_stats     = training_summary_stats,
+    data_dir              = valid_data_directory, 
+    include_velocities    = True,
+    include_scale_factors = True,
+    summary_stats         = training_summary_stats,
 )
 
 
@@ -172,29 +174,41 @@ gan.set_dataset(
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./level_0_run/checkpoints/current_model/')
+# gan.load('./velocity_run/checkpoints/current_model/')
 
 
 #=============================================================================#
-#                               Monitor
+#                               Monitors
 #=============================================================================#
 from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
 from dmsr.monitors import SpectrumMonitor
 
-checkpoint_dir = output_dir + 'checkpoints/'
+checkpoint_dir = output_dir / 'checkpoints/'
 
 monitors = {
     'loss_monitor' : LossMonitor(output_dir),
     
-    'samples_monitor' : SamplesMonitor(
+    'samples_monitor_1' : SamplesMonitor(
         gan,
         valid_data_directory,
         patch_number     = 1,
         device           = device,
-        include_velocity = True,
-        include_style    = True,
-        samples_dir      = output_dir + 'samples/'
+        velocities       = True,
+        scale_factors    = True,
+        summary_stats    = training_summary_stats,
+        samples_dir      = output_dir / 'samples_1/'
+    ),
+    
+    'samples_monitor_3' : SamplesMonitor(
+        gan,
+        valid_data_directory,
+        patch_number     = 3,
+        device           = device,
+        velocities       = True,
+        scale_factors    = True,
+        summary_stats    = training_summary_stats,
+        samples_dir      = output_dir / 'samples_1/'
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
@@ -214,7 +228,8 @@ monitors = {
     )
 }
 
-batch_report_rate = 2
+
+batch_report_rate = 16
 monitor_manager = MonitorManager(batch_report_rate, device)
 monitor_manager.set_monitors(monitors)
 gan.set_monitor(monitor_manager)
@@ -235,20 +250,20 @@ gan.set_monitor(monitor_manager)
 
 # validator = SupervisedMonitor(generator, valid_dataloader, device)
 
-supervised_epochs = 1
-gan.train(
-    supervised_epochs, 
-    train_step = gan.generator_supervised_step
-)
-gan.train(
-    supervised_epochs, 
-    train_step = gan.critic_supervised_step
-)
+# supervised_epochs = 5
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.generator_supervised_step
+# )
+# gan.train(
+#     supervised_epochs, 
+#     train_step = gan.critic_supervised_step
+# )
 
 
 #=============================================================================#
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 1
+num_epochs = 2
 gan.train(num_epochs)

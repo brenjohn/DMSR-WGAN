@@ -103,7 +103,7 @@ class SpectrumMonitor(Monitor):
         # Save the new metric values.
         self.uniform_metric_history.append(uniform_metric)
         self.l2_metric_history.append(l2_metric)
-        filename = self.checkpoint_dir + 'power_spectra_metrics.npz'
+        filename = self.checkpoint_dir / 'power_spectra_metrics.npz'
         np.savez(filename, **{
             'uniform_metric' : self.uniform_metric_history,
             'l2_metric' : self.l2_metric_history
@@ -118,7 +118,7 @@ class SpectrumMonitor(Monitor):
             checkpoint_name = 'best_uniform_model'
             checkpoint_name += f'_epoch={epoch}'
             checkpoint_name += f'_{uniform_metric:.4f}/'
-            self.gan.save(self.checkpoint_dir + checkpoint_name)
+            self.gan.save(self.checkpoint_dir / checkpoint_name)
             
         if l2_metric < self.current_best_l2_metric:
             self.current_best_l2_metric = l2_metric
@@ -127,7 +127,7 @@ class SpectrumMonitor(Monitor):
             checkpoint_name = 'best_l2_model'
             checkpoint_name += f'_epoch={epoch}'
             checkpoint_name += f'_{l2_metric:.4f}/'
-            self.gan.save(self.checkpoint_dir + checkpoint_name)
+            self.gan.save(self.checkpoint_dir / checkpoint_name)
     
     
     def get_power_spectrum(self, field):

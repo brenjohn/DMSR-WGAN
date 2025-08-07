@@ -1,0 +1,11 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+scripts/
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml

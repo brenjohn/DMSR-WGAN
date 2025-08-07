@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dmsr_wgan"
+version = "0.1.0"
+description = "DMSR-WGAN: Super-resolution for dark-matter simulations"
+authors = [
+    { name = "John Brennan", email = "johnmarkbrennan@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "torch",
+    "h5py",
+    "networkx"
+]
+
+[project.urls]
+Homepage = "https://github.com/brenjohn/DMSR-WGAN"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dm_analysis", "src/swift_tools", "src/dmsr"]
