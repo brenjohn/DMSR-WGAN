@@ -8,8 +8,7 @@ Created on Wed Sep 25 10:34:12 2024
 This file define the DMSR-WGAN class.
 """
 
-import os
-
+from pathlib import Path
 from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
@@ -219,35 +218,35 @@ class DMSRWGAN:
     #                         Saving and Loading
     #=========================================================================#
 
-    def save(self, model_dir='./data/model/'):
+    def save(self, model_dir=Path('./data/model/')):
         """Save the model
         
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
-        os.makedirs(model_dir, exist_ok=True)
+        model_dir.mkdir(parents=True, exist_ok=True)
 
-        save(self.critic, model_dir + 'critic.pth')
-        save(self.generator, model_dir + 'generator.pth')
+        save(self.critic, model_dir / 'critic.pth')
+        save(self.generator, model_dir / 'generator.pth')
 
         optimizer_states = {
             'optimizer_c' : self.optimizer_c.state_dict(),
             'optimizer_g' : self.optimizer_g.state_dict()
         }
-        save(optimizer_states, model_dir + 'optimizers.pth')
+        save(optimizer_states, model_dir / 'optimizers.pth')
         
         attributes = {
             'batch_counter'         : self.batch_counter,
             'gradient_penalty_rate' : self.gradient_penalty_rate
         }
-        save(attributes, model_dir + 'attributes.pth')
+        save(attributes, model_dir / 'attributes.pth')
         
         
     def load(self, model_dir):
         """Load a saved model
         """
-        self.critic = load(model_dir + 'critic.pth', weights_only=False)
-        self.generator = load(model_dir + 'generator.pth', weights_only=False)
+        self.critic = load(model_dir / 'critic.pth', weights_only=False)
+        self.generator = load(model_dir / 'generator.pth', weights_only=False)
         
         # Here we create new instances of the optimizers to update the weights
         # of the new models just created.
@@ -258,10 +257,10 @@ class DMSRWGAN:
         self.optimizer_g = optimizer_type(self.generator.parameters())
         
         # Now load the saved state of the optimizers.
-        optimizers = load(model_dir + 'optimizers.pth', weights_only=False)
+        optimizers = load(model_dir / 'optimizers.pth', weights_only=False)
         self.optimizer_c.load_state_dict(optimizers['optimizer_c'])
         self.optimizer_g.load_state_dict(optimizers['optimizer_g'])
         
         # Load any additional attributes that were saved.
-        attributes = load(model_dir + 'attributes.pth', weights_only=False)
+        attributes = load(model_dir / 'attributes.pth', weights_only=False)
         vars(self).update(attributes)

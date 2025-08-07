@@ -6,12 +6,12 @@ Created on Fri Mar 14 14:27:20 2025
 @author: brennan
 """
 
-import os
+import h5py
 import torch
 import numpy as np
 
+from pathlib import Path
 from .monitor import Monitor
-from ..data_tools import load_numpy_tensor
 
 
 class SamplesMonitor(Monitor):
@@ -25,10 +25,10 @@ class SamplesMonitor(Monitor):
             data_directory,
             patch_number,
             device,
-            include_velocity = True,
-            include_style = True,
+            velocities    = False,
+            scale_factors = False,
             summary_stats = None,
-            samples_dir = './data/samples/'
+            samples_dir   = Path('./data/samples/')
         ):
         
         self.device = device
@@ -36,7 +36,7 @@ class SamplesMonitor(Monitor):
         self.summary_stats = summary_stats
         
         lr_sample, hr_sample, style = self.get_sample(
-            data_directory, patch_number, include_velocity, include_style
+            data_directory, patch_number, velocities, scale_factors
         )
         
         self.lr_sample = lr_sample
@@ -47,45 +47,39 @@ class SamplesMonitor(Monitor):
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = samples_dir
-        os.makedirs(self.samples_dir, exist_ok=True)
-        np.save(self.samples_dir + 'lr_sample.npy', lr_sample.numpy())
-        np.save(self.samples_dir + 'hr_sample.npy', hr_sample.numpy())
+        self.samples_dir.mkdir(parents=True, exist_ok=True)
+        np.save(self.samples_dir / 'lr_sample.npy', lr_sample.numpy())
+        np.save(self.samples_dir / 'hr_sample.npy', hr_sample.numpy())
         
         
     def get_sample(
             self, 
             data_dir, 
             patch_num, 
-            include_velocity,
-            include_style
+            velocities,
+            scale_factors
         ):
-        patch_name = f'patch_{patch_num}.npy'
-        lr_data = load_numpy_tensor(data_dir + 'LR_disp_fields/' + patch_name)
-        hr_data = load_numpy_tensor(data_dir + 'HR_disp_fields/' + patch_name)
+        patch_name = data_dir / f'patches/patch_{patch_num}.h5'
         style = None
         
-        if self.summary_stats is not None:
-            lr_data /= self.summary_stats['LR_disp_fields_std']
-            hr_data /= self.summary_stats['HR_disp_fields_std']
+        with h5py.File(patch_name, 'r') as patch:
+            lr_data = patch['LR_Coordinates'][()]
+            hr_data = patch['HR_Coordinates'][()]
+            lr_data = self.scale(lr_data, 'LR_disp_fields_std')
+            hr_data = self.scale(hr_data, 'HR_disp_fields_std')
         
-        if include_velocity:
-            lr_velocity = load_numpy_tensor(
-                data_dir + 'LR_vel_fields/' + patch_name
-            )
-            hr_velocity = load_numpy_tensor(
-                data_dir + 'HR_vel_fields/' + patch_name
-            )
+            if velocities:
+                lr_velocity = patch['LR_Velocities'][()]
+                hr_velocity = patch['HR_Velocities'][()]
+                lr_velocity = self.scale(lr_velocity, 'LR_vel_fields_std')
+                hr_velocity = self.scale(hr_velocity, 'HR_vel_fields_std')
             
-            if self.summary_stats is not None:
-                lr_velocity /= self.summary_stats['LR_vel_fields_std']
-                hr_velocity /= self.summary_stats['HR_vel_fields_std']
-            
-            lr_data = torch.concat((lr_data, lr_velocity))
-            hr_data = torch.concat((hr_data, hr_velocity))
-            
-        if include_style:
-            styles = load_numpy_tensor(data_dir + 'scale_factors.npy')
-            style = styles[patch_num][None, ...]
+                lr_data = torch.concat((lr_data, lr_velocity))
+                hr_data = torch.concat((hr_data, hr_velocity))
+                
+            if scale_factors:
+                style = patch.attrs['scale_factor']
+                style = torch.tensor([[style]]).float()
         
         return lr_data[None, ...], hr_data[None, ...], style
         
@@ -101,5 +95,12 @@ class SamplesMonitor(Monitor):
         
         # Move the fake data to the cpu and save.
         sr_sample = sr_sample.detach().cpu()
-        filename = self.samples_dir + f'sr_sample_{epoch:04}.npy'
+        filename = self.samples_dir / f'sr_sample_{epoch:04}.npy'
         np.save(filename, sr_sample.numpy())
+        
+    
+    def scale(self, data, std_name):
+        data = torch.from_numpy(data).float()
+        if self.summary_stats is not None:
+            data = data / self.summary_stats[std_name]
+        return data
