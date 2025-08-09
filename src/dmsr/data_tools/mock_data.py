@@ -83,14 +83,14 @@ def generate_metadata(data_dir, lr_grid, hr_grid, lr_padding, hr_padding):
     })
     
     np.save(data_dir / 'summary_stats.npy', {
-        'LR_disp_fields_std'  : 1,
-        'LR_disp_fields_mean' : 0,
-        'HR_disp_fields_std'  : 1,
-        'HR_disp_fields_mean' : 0,
-        'LR_vel_fields_std'   : 1,
-        'LR_vel_fields_mean'  : 0,
-        'HR_vel_fields_std'   : 1,
-        'HR_vel_fields_mean'  : 0,
+        'LR_Coordinates_std'  : 1,
+        'LR_Coordinates_mean' : 0,
+        'HR_Coordinates_std'  : 1,
+        'HR_Coordinates_mean' : 0,
+        'LR_Velocities_std'   : 1,
+        'LR_Velocities_mean'  : 0,
+        'HR_Velocities_std'   : 1,
+        'HR_Velocities_mean'  : 0,
     })
 
 

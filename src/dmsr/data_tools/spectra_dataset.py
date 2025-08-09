@@ -42,11 +42,11 @@ class SpectraDataset(Dataset):
         with h5py.File(patch_name, 'r') as patch:
             lr_data = patch['LR_Coordinates'][()]
             hr_data = patch['HR_Power_Spectrum'][()]
-            lr_data = self.scale(lr_data, 'LR_disp_fields_std')
+            lr_data = self.scale(lr_data, 'LR_Coordinates_std')
             
             if self.velocities:
                 lr_velocity = patch['LR_Velocities'][()]
-                lr_velocity = self.scale(lr_velocity, 'LR_vel_fields_std')
+                lr_velocity = self.scale(lr_velocity, 'LR_Velocities_std')
                 lr_data = torch.concat((lr_data, lr_velocity))
                 
             if self.scale_factors:

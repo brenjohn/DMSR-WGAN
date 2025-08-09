@@ -28,7 +28,8 @@ class SamplesMonitor(Monitor):
             velocities    = False,
             scale_factors = False,
             summary_stats = None,
-            samples_dir   = Path('./data/samples/')
+            samples_dir   = Path('./data/samples/'),
+            seed          = 42
         ):
         
         self.device = device
@@ -43,7 +44,8 @@ class SamplesMonitor(Monitor):
         self.hr_sample = hr_sample
         self.style = style
         
-        z = self.generator.sample_latent_space(1, device)
+        torch_generator = torch.Generator(device).manual_seed(seed)
+        z = self.generator.sample_latent_space(1, device, torch_generator)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = samples_dir
@@ -65,14 +67,14 @@ class SamplesMonitor(Monitor):
         with h5py.File(patch_name, 'r') as patch:
             lr_data = patch['LR_Coordinates'][()]
             hr_data = patch['HR_Coordinates'][()]
-            lr_data = self.scale(lr_data, 'LR_disp_fields_std')
-            hr_data = self.scale(hr_data, 'HR_disp_fields_std')
+            lr_data = self.scale(lr_data, 'LR_Coordinates_std')
+            hr_data = self.scale(hr_data, 'HR_Coordinates_std')
         
             if velocities:
                 lr_velocity = patch['LR_Velocities'][()]
                 hr_velocity = patch['HR_Velocities'][()]
-                lr_velocity = self.scale(lr_velocity, 'LR_vel_fields_std')
-                hr_velocity = self.scale(hr_velocity, 'HR_vel_fields_std')
+                lr_velocity = self.scale(lr_velocity, 'LR_Velocities_std')
+                hr_velocity = self.scale(hr_velocity, 'HR_Velocities_std')
             
                 lr_data = torch.concat((lr_data, lr_velocity))
                 hr_data = torch.concat((hr_data, hr_velocity))

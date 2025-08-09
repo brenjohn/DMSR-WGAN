@@ -86,7 +86,7 @@ class SpectrumMonitor(Monitor):
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z, style)
             displacements = sr_sample[:, 0:3, ...].detach()
-            displacements *= self.summary_stats['HR_disp_fields_std']
+            displacements *= self.summary_stats['HR_Coordinates_std']
             sr_ks, sr_spectrum = self.get_power_spectrum(displacements)
             
             # Compute the uniform metric between the real and fake power 

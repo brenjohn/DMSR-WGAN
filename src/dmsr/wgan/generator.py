@@ -129,14 +129,17 @@ class DMSRGenerator(nn.Module):
         return y
     
     
-    def sample_latent_space(self, batch_size, device):
+    def sample_latent_space(self, batch_size, device=None, generator=None):
         """Returns a sample from the generator's latent space.
         """
         latent_variable = [None] * len(self.noise_shapes)
         for i, (shape_A, shape_B) in enumerate(self.noise_shapes):
             shape_A = (batch_size, 1) + 3 * (shape_A,)
             shape_B = (batch_size, 1) + 3 * (shape_B,)
-            noise = randn(shape_A).to(device), randn(shape_B).to(device)
+            noise = (
+                randn(shape_A, generator=generator, device=device), 
+                randn(shape_B, generator=generator, device=device)
+            )
             latent_variable[i] = noise
             
         return latent_variable

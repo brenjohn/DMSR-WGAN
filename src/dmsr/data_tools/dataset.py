@@ -47,8 +47,8 @@ class PatchDataSet(Dataset):
         with h5py.File(patch_name, 'r') as patch:
             lr_data = patch['LR_Coordinates'][()]
             hr_data = patch['HR_Coordinates'][()]
-            lr_data = self.scale(lr_data, 'LR_disp_fields_std')
-            hr_data = self.scale(hr_data, 'HR_disp_fields_std')
+            lr_data = self.scale(lr_data, 'LR_Coordinates_std')
+            hr_data = self.scale(hr_data, 'HR_Coordinates_std')
             
             # Apply augmentation (random flip/permutation) if specified
             if self.augment:
@@ -59,8 +59,8 @@ class PatchDataSet(Dataset):
             if self.velocities:
                 lr_velocity = patch['LR_Velocities'][()]
                 hr_velocity = patch['HR_Velocities'][()]
-                lr_velocity = self.scale(lr_velocity, 'LR_vel_fields_std')
-                hr_velocity = self.scale(hr_velocity, 'HR_vel_fields_std')
+                lr_velocity = self.scale(lr_velocity, 'LR_Velocities_std')
+                hr_velocity = self.scale(hr_velocity, 'HR_Velocities_std')
             
                 if self.augment:
                     lr_velocity = permute_tensor(lr_velocity, random_perm)

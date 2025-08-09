@@ -18,7 +18,6 @@ from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import PatchDataSet
-from dmsr.data_tools import load_numpy_tensor
 from dmsr.data_tools import generate_mock_dataset
 
 
@@ -148,7 +147,7 @@ gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(
     dataloader, 
     batch_size, 
-    box_size / training_summary_stats['HR_disp_fields_std']
+    box_size / training_summary_stats['HR_Coordinates_std']
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
