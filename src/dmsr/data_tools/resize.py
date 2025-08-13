@@ -14,6 +14,9 @@ def crop(field, crop_size):
     
     The tensor `field` should have shape (batch_size, channels, Nx, Ny, Nz).
     """
+    if crop_size == 0:
+        return field
+    
     ind = (slice(None),) * 2 + (slice(crop_size, -crop_size),) * 3
     return field[ind]
 

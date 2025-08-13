@@ -28,13 +28,13 @@ class PatchDataSet(Dataset):
             summary_stats         = None,
             augment               = True
         ):
-        self.data_dir      = data_dir
+        self.data_dir      = data_dir / 'patches/'
         self.velocities    = include_velocities
         self.scale_factors = include_scale_factors
         self.summary_stats = summary_stats
         self.augment       = augment
             
-        self.num_patches = len(list(data_dir.iterdir()))
+        self.num_patches = len(list(self.data_dir.iterdir()))
         
         
     def __len__(self):
@@ -42,7 +42,7 @@ class PatchDataSet(Dataset):
     
     
     def __getitem__(self, idx):
-        patch_name = self.data_dir / f'patches/patch_{idx}.h5'
+        patch_name = self.data_dir / f'patch_{idx}.h5'
         
         with h5py.File(patch_name, 'r') as patch:
             lr_data = patch['LR_Coordinates'][()]

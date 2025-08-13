@@ -35,10 +35,8 @@ box_size  = HR_patch_length
 
 #%%
 patch_dir = dataset_dir / 'patches/'
-num_patches = len(list(patch_dir.iterdir()))
 
-for patch_num in range(num_patches):
-    patch_file = patch_dir / f"patch_{patch_num:05d}.h5"
+for patch_file in patch_dir.iterdir():
     
     with h5py.File(patch_file, 'a') as file:
         patch = file['HR_Coordinates'][()]

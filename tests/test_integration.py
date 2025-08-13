@@ -83,27 +83,6 @@ class TestTrainingIntegrationTest(unittest.TestCase):
         
         samples_path = self.test_output_dir / 'test_run/samples'
         self.assertTrue(samples_path.exists(), "No samples generated")
-    
-    
-    def test_density_critic(self):
-        result = subprocess.run(
-            ['python', '../training_examples/training_density_critic.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
-        )
-        
-        if self.show_output:
-            print("\n--- Density test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        
-        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
-        
-        samples_path = self.test_output_dir / 'test_run/samples'
-        self.assertTrue(samples_path.exists(), "No samples generated")
         
         
     def test_style(self):

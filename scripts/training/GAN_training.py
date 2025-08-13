@@ -6,14 +6,10 @@ Created on Fri Sep 13 11:35:32 2024
 @author: brennan
 """
 
-import os
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import torch
 import numpy as np
 
+from pathlib import Path
 from torch import optim
 from torch.utils.data import DataLoader
 
@@ -22,7 +18,6 @@ from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import PatchDataSet
-from dmsr.data_tools import load_numpy_tensor
 
 
 # Check if CUDA is available and set the device
@@ -30,8 +25,8 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = './nn_run/'
-os.makedirs(output_dir, exist_ok=True)
+output_dir = Path('./tmp_run/')
+output_dir.mkdir(exist_ok=True)
 
 
 #=============================================================================#
@@ -40,7 +35,7 @@ os.makedirs(output_dir, exist_ok=True)
 lr_grid_size   = 20
 input_channels = 6
 base_channels  = 128
-crop_size      = 2
+crop_size      = 1
 upscale_factor = 2
 style_size     = 1
 
@@ -54,17 +49,16 @@ generator = DMSRGenerator(
 )
 
 hr_grid_size         = generator.output_size
-critic_input_size    = hr_grid_size
-input_channels       = 20
+critic_input_size    = hr_grid_size - 2
+input_channels       = 3 + 3 + 3 + 3 + 6 + 1
 base_channels        = 128
-density_scale_factor = 2
 
 critic = DMSRCritic(
     critic_input_size, 
     input_channels, 
-    base_channels, 
-    density_scale_factor, 
-    style_size
+    base_channels,
+    style_size = style_size,
+    use_nn_distance_features = True
 )
 
 generator.to(device)
@@ -87,35 +81,23 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = '../../data/dmsr_style_train/'
-# data_directory = '../../data/dmsr_style_valid/'
+data_directory = Path('../../data/dmsr_style_train/').resolve()
 batch_size = 8
 
-metadata = load_numpy_tensor(data_directory + 'metadata.npy')
-box_size        = metadata[0].item()
-LR_patch_length = metadata[1].item()
-HR_patch_length = metadata[2].item()
-LR_patch_size   = metadata[3].int().item()
-HR_patch_size   = metadata[4].int().item()
-LR_inner_size   = metadata[5].int().item()
-padding         = metadata[6].int().item()
-LR_mass         = metadata[7].item()
-HR_mass         = metadata[8].item()
+metadata = np.load(data_directory / 'metadata.npy', allow_pickle=True).item()
 
 training_summary_stats = np.load(
-    data_directory + 'summary_stats.npy', allow_pickle=True
+    data_directory / 'summary_stats.npy', allow_pickle=True
 ).item()
-np.save(output_dir + 'normalisation.npy', training_summary_stats)
-np.save(output_dir + 'metadata.npy', metadata)
+np.save(output_dir / 'normalisation.npy', training_summary_stats)
+np.save(output_dir / 'metadata.npy', metadata)
 
 dataset = PatchDataSet(
-    lr_position_dir   = data_directory + 'LR_disp_fields/',
-    hr_position_dir   = data_directory + 'HR_disp_fields/', 
-    lr_velocity_dir   = data_directory + 'LR_vel_fields/', 
-    hr_velocity_dir   = data_directory + 'HR_vel_fields/', 
-    scale_factor_file = data_directory + 'scale_factors.npy',
-    summary_stats     = training_summary_stats,
-    augment=True
+    data_dir              = data_directory,
+    include_velocities    = True,
+    include_scale_factors = True,
+    summary_stats         = training_summary_stats,
+    augment               = True
 )
 
 dataloader = DataLoader(
@@ -133,14 +115,13 @@ dataloader = DataLoader(
 #=============================================================================#
 from dmsr.data_tools import SpectraDataset
 
-valid_data_directory = '../../data/dmsr_style_valid/'
+valid_data_directory = Path('../../data/dmsr_style_valid/').resolve()
 
 spectra_data = SpectraDataset(
-    lr_position_dir   = valid_data_directory + 'LR_disp_fields/',
-    hr_spectrum_dir   = valid_data_directory + 'HR_spectra/', 
-    lr_velocity_dir   = valid_data_directory + 'LR_vel_fields/', 
-    scale_factor_file = valid_data_directory + 'scale_factors.npy',
-    summary_stats     = training_summary_stats,
+    data_dir              = valid_data_directory, 
+    include_velocities    = True,
+    include_scale_factors = True,
+    summary_stats         = training_summary_stats,
 )
 
 
@@ -151,11 +132,23 @@ gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(
     dataloader, 
     batch_size, 
-    box_size / training_summary_stats['HR_disp_fields_std']
+    metadata['box_size'] / training_summary_stats['HR_Coordinates_std']
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-# gan.load('./z_run/checkpoints/current_model/')
+#=============================================================================#
+#                              Optimizers
+#=============================================================================#
+# model_dir = Path('./nn_run_b/checkpoints/current_model/')
+# gan.load(model_dir)
+
+# lr_G = 0.000001
+# for g in gan.optimizer_g.param_groups:
+#     g['lr'] = lr_G
+    
+# lr_C = 0.000002
+# for g in gan.optimizer_c.param_groups:
+#     g['lr'] = lr_G
 
 
 #=============================================================================#
@@ -165,7 +158,7 @@ from dmsr.monitors import MonitorManager, LossMonitor
 from dmsr.monitors import SamplesMonitor, CheckpointMonitor
 from dmsr.monitors import SpectrumMonitor
 
-checkpoint_dir = output_dir + 'checkpoints/'
+checkpoint_dir = output_dir / 'checkpoints/'
 
 monitors = {
     'loss_monitor' : LossMonitor(output_dir),
@@ -175,10 +168,10 @@ monitors = {
         valid_data_directory,
         patch_number     = 1,
         device           = device,
-        include_velocity = True,
-        include_style    = True,
+        velocities       = True,
+        scale_factors    = True,
         summary_stats    = training_summary_stats,
-        samples_dir      = output_dir + 'samples_1/'
+        samples_dir      = output_dir / 'samples_1/'
     ),
     
     'samples_monitor_191' : SamplesMonitor(
@@ -186,10 +179,10 @@ monitors = {
         valid_data_directory,
         patch_number     = 191,
         device           = device,
-        include_velocity = True,
-        include_style    = True,
+        velocities       = True,
+        scale_factors    = True,
         summary_stats    = training_summary_stats,
-        samples_dir      = output_dir + 'samples_191/'
+        samples_dir      = output_dir / 'samples_191/'
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
@@ -200,9 +193,9 @@ monitors = {
     'spectrum_monitor' : SpectrumMonitor(
         gan,
         spectra_data,
-        HR_patch_length,
-        HR_patch_size,
-        HR_mass,
+        metadata['HR_patch_length'],
+        metadata['HR_patch_size'],
+        metadata['HR_mass'],
         training_summary_stats,
         device,
         checkpoint_dir = checkpoint_dir

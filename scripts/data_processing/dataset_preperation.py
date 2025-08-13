@@ -15,6 +15,7 @@ Each file contains represents a patch, and can include multiple datasets :
 
 import h5py
 import numpy as np
+import multiprocessing as mp
 
 from pathlib import Path
 from swift_tools.fields import cut_field
@@ -27,7 +28,9 @@ def create_fields(
         prefix,
         particle_data_name, 
         get_field_data, 
-        snapshots,
+        snapshot,
+        patch_num_start,
+        patches_per_snapshot,
         patch_size, 
         padding
     ):
@@ -36,28 +39,25 @@ def create_fields(
     individual HDF5 files.
     """
     dataset_name = f'{prefix}_{particle_data_name}'
-    patch_num = 0
     
-    for snapshot in snapshots:
-        grid_size, box_size, mass, h, a = read_metadata(snapshot)
-        IDs = read_particle_data(snapshot, 'ParticleIDs')
-        particle_data = read_particle_data(snapshot, particle_data_name)
+    grid_size, box_size, mass, h, a = read_metadata(snapshot)
+    IDs = read_particle_data(snapshot, 'ParticleIDs')
+    particle_data = read_particle_data(snapshot, particle_data_name)
+    
+    particle_data = particle_data.transpose()
+    field_data = get_field_data(particle_data, IDs, box_size, grid_size)
+    
+    patches = cut_field(
+        field_data[None,...], patch_size, patch_size, pad=padding
+    )
         
-        particle_data = particle_data.transpose()
-        field_data = get_field_data(particle_data, IDs, box_size, grid_size)
+    for num, patch in enumerate(patches):
+        patch_num = patch_num_start + num
+        patch_file = output_dir / f"patch_{patch_num}.h5"
         
-        patches = cut_field(
-            field_data[None,...], patch_size, patch_size, pad=padding
-        )
-            
-        for patch in patches:
-            patch_file = output_dir / f"patch_{patch_num}.h5"
-            
-            with h5py.File(patch_file, 'a') as file:
-                file.create_dataset(dataset_name, data = patch)
-                file.attrs['scale_factor'] = a
-
-            patch_num += 1
+        with h5py.File(patch_file, 'a') as file:
+            file.create_dataset(dataset_name, data=patch, compression="gzip")
+            file.attrs['scale_factor'] = a
 
 
 #%% Parameters
@@ -65,10 +65,14 @@ data_dir = Path('/media/brennan/Leavitt_data/data/DM_SR/')
 data_dir /= 'swift-sims/dmsr_z_runs_1Mpc/'
 
 output_dir = Path('../../data/dmsr_style_train/').resolve()
+# output_dir = Path('../../data/dmsr_style_valid/').resolve()
 output_dir.mkdir(parents=True, exist_ok=True)
 
 LR_snapshots = sorted(data_dir.glob('run[1-8]/064/snap_*.hdf5'))
 HR_snapshots = sorted(data_dir.glob('run[1-8]/128/snap_*.hdf5'))
+
+# LR_snapshots = sorted(data_dir.glob('run9/064/snap_*.hdf5'))
+# HR_snapshots = sorted(data_dir.glob('run9/128/snap_*.hdf5'))
 
 num_snaps = len(LR_snapshots)
 
@@ -105,49 +109,81 @@ np.save(meta_file, {
 })
 
 
-#%% LR displacement
+#%%
+num_procs = 14
+output_dir /= 'patches/'
+output_dir.mkdir(parents=True, exist_ok=True)
+
 print('Creating LR displacement patches.')
-create_fields(
-    output_dir,
-    'LR', 'Coordinates',
-    get_displacement_field,
-    LR_snapshots,
-    LR_inner_size,
-    LR_padding
-)
+with mp.Pool(num_procs) as pool:
+    tasks = []
+    for num, snapshot in enumerate(LR_snapshots):
+        tasks.append((
+            output_dir, 
+            'LR', 'Coordinates', 
+            get_displacement_field, 
+            snapshot,
+            patches_per_snapshot * num,
+            patches_per_snapshot,
+            LR_inner_size, 
+            LR_padding
+        ))
+        
+    pool.starmap(create_fields, tasks)
 
 
-#%% HR displacement
+#%%
 print('Creating HR displacement patches.')
-create_fields(
-    output_dir,
-    'HR', 'Coordinates',
-    get_displacement_field,
-    HR_snapshots,
-    HR_patch_size,
-    HR_padding
-)
+with mp.Pool(num_procs) as pool:
+    tasks = []
+    for num, snapshot in enumerate(HR_snapshots):
+        tasks.append((
+            output_dir, 
+            'HR', 'Coordinates', 
+            get_displacement_field, 
+            snapshot,
+            patches_per_snapshot * num,
+            patches_per_snapshot,
+            HR_inner_size, 
+            HR_padding
+        ))
+        
+    pool.starmap(create_fields, tasks)
 
 
-#%% LR velocity
+#%%
 print('Creating LR velocity patches.')
-create_fields(
-    output_dir,
-    'LR', 'Velocities',
-    get_velocity_field,
-    LR_snapshots,
-    LR_inner_size,
-    LR_padding
-)
+with mp.Pool(num_procs) as pool:
+    tasks = []
+    for num, snapshot in enumerate(LR_snapshots):
+        tasks.append((
+            output_dir, 
+            'LR', 'Velocities', 
+            get_velocity_field, 
+            snapshot,
+            patches_per_snapshot * num,
+            patches_per_snapshot,
+            LR_inner_size, 
+            LR_padding
+        ))
+        
+    pool.starmap(create_fields, tasks)
 
 
-#%% HR velocity
+#%%
 print('Creating HR velocity patches.')
-create_fields(
-    output_dir,
-    'HR', 'Velocities',
-    get_velocity_field,
-    HR_snapshots,
-    HR_patch_size,
-    HR_padding
-)
+with mp.Pool(num_procs) as pool:
+    tasks = []
+    for num, snapshot in enumerate(HR_snapshots):
+        tasks.append((
+            output_dir, 
+            'HR', 'Velocities', 
+            get_velocity_field, 
+            snapshot,
+            patches_per_snapshot * num,
+            patches_per_snapshot,
+            HR_inner_size, 
+            HR_padding
+        ))
+    
+    pool.starmap(create_fields, tasks)

@@ -32,6 +32,29 @@ class DMSRWGAN:
         self.scale_factor = generator.scale_factor
         self.mse_loss = MSELoss()
         
+        self._compute_crop_sizes()
+        
+        
+    def _compute_crop_sizes(self):
+        """
+        To condition the critic model on lr data, the lr data needs to be
+        upscaled using linear interpolation. On top of this, the data needs to
+        be cropped before and after the interpolation to remove excess cells in
+        the data. This method computes the crop sizes for these operations
+        using the input sizes of the generator and critic models.
+        """
+        lr_size = self.generator.grid_size
+        hr_size = self.critic.input_size
+        hr_size += 2 * self.critic.use_nn_distance_features
+        scale = self.generator.scale_factor
+        
+        # Calculate the crop size for the lr data.
+        self.lr_crop_size = (lr_size - hr_size // scale) // 2
+        
+        # Calculate the final crop size for the upscaled lr data.
+        self.hr_crop_size = 2 * (lr_size - 2 * self.lr_crop_size) - hr_size
+        self.hr_crop_size //=2
+        
         
     def set_dataset(
             self, 
@@ -108,10 +131,11 @@ class DMSRWGAN:
             style = style.to(self.device)
         
         # Prepare upscaled data
-        us_batch = crop(lr_batch, self.generator.padding)
+        us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
-        ).detach()
+        )
+        us_batch = crop(us_batch, self.hr_crop_size).detach()
         
         # Compute the loss and update the generator parameters.
         losses = self.critic_train_step(lr_batch, hr_batch, us_batch, style)
@@ -132,10 +156,11 @@ class DMSRWGAN:
             style = style.to(self.device)
         
         # Prepare upscaled data
-        us_batch = crop(lr_batch, self.generator.padding)
+        us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(
             us_batch, scale_factor=self.scale_factor, mode='trilinear'
-        ).detach()
+        )
+        us_batch = crop(us_batch, self.hr_crop_size).detach()
         
         # Train the critic and generator models.
         critic_losses = self.critic_train_step(

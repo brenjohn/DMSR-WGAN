@@ -36,7 +36,7 @@ output_dir.mkdir(exist_ok=True)
 lr_grid_size   = 20
 input_channels = 6
 base_channels  = 16
-crop_size      = 2
+crop_size      = 1
 upscale_factor = 2
 style_size     = 1
 
@@ -91,7 +91,7 @@ generate_mock_dataset(
     lr_grid_size       = lr_grid_size,
     hr_grid_size       = hr_grid_size,
     lr_padding         = generator.padding,
-    hr_padding         = 0,
+    hr_padding         = 1,
     include_velocities = True, 
     include_scales     = True,
     include_spectra    = False
@@ -99,16 +99,6 @@ generate_mock_dataset(
 batch_size = 4
 
 metadata = np.load(data_directory / 'metadata.npy', allow_pickle=True).item()
-box_size        = metadata['box_size']
-LR_patch_length = metadata['LR_patch_length']
-HR_patch_length = metadata['HR_patch_length']
-LR_patch_size   = metadata['LR_patch_size']
-HR_patch_size   = metadata['HR_patch_size']
-LR_inner_size   = metadata['LR_inner_size']
-LR_padding      = metadata['LR_padding']
-HR_padding      = metadata['HR_padding']
-LR_mass         = metadata['LR_mass']
-HR_mass         = metadata['HR_mass']
 
 training_summary_stats = np.load(
     data_directory / 'summary_stats.npy', allow_pickle=True
@@ -144,10 +134,10 @@ valid_data_directory = Path('./data/test_valid/')
 generate_mock_dataset(
     data_dir           = valid_data_directory, 
     num_patches        = 4,
-    lr_grid_size       = LR_patch_size,
-    hr_grid_size       = HR_patch_size,
-    lr_padding         = LR_padding,
-    hr_padding         = 0,
+    lr_grid_size       = metadata['LR_patch_size'],
+    hr_grid_size       = metadata['HR_patch_size'],
+    lr_padding         = metadata['LR_padding'],
+    hr_padding         = metadata['HR_padding'],
     include_velocities = True, 
     include_scales     = True,
     include_spectra    = True
@@ -168,7 +158,7 @@ gan = DMSRWGAN(generator, critic, device)
 gan.set_dataset(
     dataloader, 
     batch_size, 
-    box_size / training_summary_stats['HR_Coordinates_std']
+    metadata['box_size'] / training_summary_stats['HR_Coordinates_std']
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
@@ -217,9 +207,9 @@ monitors = {
     'spectrum_monitor' : SpectrumMonitor(
         gan,
         spectra_data,
-        HR_patch_length,
-        HR_patch_size,
-        HR_mass,
+        metadata['HR_patch_length'],
+        metadata['HR_patch_size'],
+        metadata['HR_mass'],
         training_summary_stats,
         device,
         checkpoint_dir = checkpoint_dir

@@ -20,14 +20,15 @@ class DMSRGenerator(nn.Module):
     """The generator model for the DMSR-WGAN.
     """
     
-    def __init__(self,
-                 grid_size,
-                 input_channels,
-                 base_channels,
-                 crop_size=0,
-                 scale_factor=4,
-                 style_size=None,
-                 **kwargs
+    def __init__(
+            self,
+            grid_size,
+            input_channels,
+            base_channels,
+            crop_size=0,
+            scale_factor=4,
+            style_size=None,
+            **kwargs
         ):
         super().__init__()
         self.grid_size      = grid_size
