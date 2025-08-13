@@ -6,19 +6,12 @@ Created on Sun May 11 12:14:14 2025
 @author: brennan
 """
 
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
-import os
 import re
-import glob
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dm_analysis import power_spectrum, cloud_in_cells
-from dmsr.field_analysis import displacements_to_positions
+from pathlib import Path
+from dm_analysis import cloud_in_cells
 from swift_tools.fields import get_positions
 
 
@@ -74,25 +67,34 @@ def plot_densities(
     fig.suptitle(f'Epoch {epoch}')
     plt.tight_layout()
     
-    os.makedirs(plots_dir, exist_ok=True)
-    plot_name = plots_dir + f'density_plot_epoch_{epoch:04}.png'
-    fig.savefig(plot_name, dpi=100)
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_path = plots_dir / f'density_plot_epoch_{epoch:04}.png'
+    fig.savefig(plot_path, dpi=100)
     plt.close(fig)
+    
+
+def extract_epoch(filename):
+    """Extract epoch number from a sample or plot filename."""
+    return int(re.split(r'[._]+', Path(filename).stem)[-1])
 
 
 #%%
-data_dir = './nn_run/'
-plots_dir = data_dir + 'plots/sample_density_191/'
-samples_dir = data_dir + 'samples_191/'
-sr_samples = glob.glob(samples_dir + 'sr_sample_*.npy')
-sr_samples = np.sort(sr_samples)
+data_dir = Path('./nn_run_c/')
+plots_dir = data_dir / 'plots/sample_density_191'
+samples_dir = data_dir / 'samples_191'
 
-existing_plots = glob.glob(plots_dir + 'density_plot_epoch_*.png')
-existing_plots = [re.split(r'[._]+', plot)[-2] for plot in existing_plots]
-sr_samples = [sample for sample in sr_samples 
-              if not re.split(r'[._]+', sample)[-2] in existing_plots]
+sr_sample_paths = sorted(samples_dir.glob('sr_sample_*.npy'))
 
-metadata = np.load(data_dir + 'metadata.npy')
+# Filter out already plotted samples
+existing_plots = [
+    extract_epoch(p) for p in plots_dir.glob('density_plot_epoch_*.png')
+]
+sr_sample_paths = [
+    p for p in sr_sample_paths if extract_epoch(p) not in existing_plots
+]
+
+# Load metadata
+metadata = np.load(data_dir / 'metadata.npy')
 box_size        = metadata[0]
 LR_patch_length = metadata[1]
 HR_patch_length = metadata[2]
@@ -103,24 +105,30 @@ padding         = int(metadata[6])
 LR_mass         = metadata[7]
 HR_mass         = metadata[8]
 
+# Load normalisation stats
 training_summary_stats = np.load(
-    data_dir + 'normalisation.npy', allow_pickle=True
+    data_dir / 'normalisation.npy', allow_pickle=True
 ).item()
 lr_std = training_summary_stats['LR_disp_fields_std']
 hr_std = training_summary_stats['HR_disp_fields_std']
 
-lr_sample = np.load(samples_dir + 'lr_sample.npy')[:, :3, ...]
-hr_sample = np.load(samples_dir + 'hr_sample.npy')[:, :3, ...]
+# Load reference samples
+lr_sample = lr_std * np.load(samples_dir / 'lr_sample.npy')[:, :3, ...]
+hr_sample = hr_std * np.load(samples_dir / 'hr_sample.npy')[:, :3, ...]
 
-
-for sr_sample in sr_samples:
-    epoch = int(re.split(r'[._]+', sr_sample)[-2])
-    sr_sample = np.load(sr_sample)[:, :3, ...]
+# Plot loop
+for sr_path in sr_sample_paths:
+    epoch = extract_epoch(sr_path)
+    sr_sample = hr_std * np.load(sr_path)[:, :3, ...]
     
     plot_densities(
-        lr_std * lr_sample, hr_std * sr_sample, hr_std * hr_sample, 
-        LR_patch_length, HR_patch_length, 
-        LR_patch_size, HR_patch_size,
+        lr_sample, 
+        sr_sample, 
+        hr_sample, 
+        LR_patch_length, 
+        HR_patch_length, 
+        LR_patch_size, 
+        HR_patch_size,
         epoch,
         plots_dir
     )

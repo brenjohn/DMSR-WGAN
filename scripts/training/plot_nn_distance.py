@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Sep 26 13:35:32 2024
+Created on Thu Jun 26 16:55:04 2025
 
 @author: brennan
 """
@@ -12,63 +12,71 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from pathlib import Path
-from dmsr.field_analysis import displacements_to_positions
+from dmsr.field_analysis import nn_distance_field
 
 
-def plot_samples(
-        lr_sample, sr_sample, hr_sample,
-        lr_box_size, hr_box_size, epoch,
-        plots_dir,
+def plot_nn_distance(
+        sr_sample, 
+        hr_sample,
+        lr_box_size,
+        hr_box_size,
+        epoch,
+        plots_dir = 'plots/training_samples/',
         save=True
     ):
-    lr_data = torch.from_numpy(lr_sample)
     sr_data = torch.from_numpy(sr_sample)
     hr_data = torch.from_numpy(hr_sample)
     
-    lr_positions = displacements_to_positions(lr_data, lr_box_size)
-    sr_positions = displacements_to_positions(sr_data, hr_box_size)
-    hr_positions = displacements_to_positions(hr_data, hr_box_size)
+    sr_df = nn_distance_field(sr_data, hr_box_size)
+    hr_df = nn_distance_field(hr_data, hr_box_size)
     
-    lr_xs, lr_ys = get_xys(lr_positions)
-    sr_xs, sr_ys = get_xys(sr_positions)
-    hr_xs, hr_ys = get_xys(hr_positions)
+    sr_dx, sr_dy, sr_dz = project(sr_df)
+    hr_dx, hr_dy, hr_dz = project(hr_df)
+    
+    vmax = max(hr_dx.max(), hr_dy.max(), hr_dz.max())
+    vmin = min(hr_dx.min(), hr_dy.min(), hr_dz.min())
     
     # Create a figure
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(21, 8))
+    fig, axes = plt.subplots(2, 3, figsize=(12, 8))
     
     # LR scatter plot
-    ax1.scatter(lr_xs, lr_ys, alpha=0.3, s=0.5)
-    ax1.set_title('LR')
+    axes[0, 0].imshow(sr_dx, vmax=vmax, vmin=vmin)
+    axes[0, 1].imshow(sr_dy, vmax=vmax, vmin=vmin)
+    axes[0, 2].imshow(sr_dz, vmax=vmax, vmin=vmin)
+    axes[0, 0].set_ylabel('SR', fontsize=20)
     
-    # HR scatter plot
-    ax3.scatter(hr_xs, hr_ys, alpha=0.2, s=0.2)
-    ax3.set_title('HR')
-    # ax3.set_xlim([0.2, 0.4])
-    # ax3.set_ylim([0.2, 0.4])
+    # LR scatter plot
+    axes[1, 0].imshow(hr_dx, vmax=vmax, vmin=vmin)
+    axes[1, 1].imshow(hr_dy, vmax=vmax, vmin=vmin)
+    axes[1, 2].imshow(hr_dz, vmax=vmax, vmin=vmin)
+    axes[1, 0].set_ylabel('HR', fontsize=20)
     
-    # SR scatter plot
-    ax2.scatter(sr_xs, sr_ys, alpha=0.2, s=0.2)
-    ax2.set_title('SR')
-    ax2.set_xlim(ax3.get_xlim())
-    ax2.set_ylim(ax3.get_ylim())
-    # ax2.set_xlim([0.2, 0.4])
-    # ax2.set_ylim([0.2, 0.4])
+    for a in axes.flatten():
+        a.set_xticks([])
+        a.set_yticks([])
     
     # Add title and adjust layout
     fig.suptitle(f'Epoch {epoch}')
     plt.tight_layout()
+    # plt.show()
     
     plots_dir.mkdir(parents=True, exist_ok=True)
-    plot_path = plots_dir / f'particle_plot_epoch_{epoch:04}.png'
+    plot_path = plots_dir / f'nn_distance_epoch_{epoch:04}.png'
     fig.savefig(plot_path, dpi=100)
     plt.close(fig)
 
+
+def project(dn):
+    dn = -1/(10*dn + 0.01)
+    # dn = torch.log(100*dn)
+    dn = torch.sum(dn, dim=-1)
+    # print(dn.max(), dn.min())
     
-def get_xys(positions):
-    """Extract x and y coordinates from a tensor of shape (N, 3, ...)"""
-    positions = torch.transpose(positions, 1, -1)
-    positions = positions.reshape((-1, 3))
-    return positions[:, 0], positions[:, 1]
+    dx = dn[0, 0, ...].flip(dims=(0,))
+    dy = dn[0, 2, ...].flip(dims=(0,))
+    dz = dn[0, 4, ...].flip(dims=(0,))
+    
+    return dx, dy, dz
 
 
 def extract_epoch(filename):
@@ -78,14 +86,14 @@ def extract_epoch(filename):
 
 #%%
 data_dir = Path('./nn_run_c/')
-plots_dir = data_dir / 'plots/training_samples_191'
+plots_dir = data_dir / 'plots/nn_distance_191'
 samples_dir = data_dir / 'samples_191'
 
 sr_sample_paths = sorted(samples_dir.glob('sr_sample_*.npy'))
 
 # Filter out already plotted samples
 existing_plots = [
-    extract_epoch(p) for p in plots_dir.glob('particle_plot_epoch_*.png')
+    extract_epoch(p) for p in plots_dir.glob('nn_distance_epoch_*.png')
 ]
 sr_sample_paths = [
     p for p in sr_sample_paths if extract_epoch(p) not in existing_plots
@@ -114,17 +122,17 @@ hr_std = training_summary_stats['HR_disp_fields_std']
 lr_sample = lr_std * np.load(samples_dir / 'lr_sample.npy')[:, :3, ...]
 hr_sample = hr_std * np.load(samples_dir / 'hr_sample.npy')[:, :3, ...]
 
+
 # Plot loop
 for sr_path in sr_sample_paths:
     epoch = extract_epoch(sr_path)
     sr_sample = hr_std * np.load(sr_path)[:, :3, ...]
-
-    plot_samples(
-        lr_sample,
-        sr_sample,
-        hr_sample,
+    
+    plot_nn_distance(
+        sr_sample, 
+        hr_sample, 
         LR_patch_length, 
-        HR_patch_length,
+        HR_patch_length, 
         epoch,
         plots_dir
     )

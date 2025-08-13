@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 13 11:35:32 2024
+Created on Tue Jun 17 17:30:53 2025
 
 @author: brennan
 """
@@ -18,6 +18,7 @@ from dmsr.wgan import DMSRCritic
 from dmsr.wgan import DMSRGenerator
 
 from dmsr.data_tools import PatchDataSet
+from dmsr.data_tools import generate_mock_dataset
 
 
 # Check if CUDA is available and set the device
@@ -25,7 +26,7 @@ gpu_id = 0
 device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-output_dir = Path('./tmp_run/')
+output_dir = Path('./test_run/')
 output_dir.mkdir(exist_ok=True)
 
 
@@ -34,7 +35,7 @@ output_dir.mkdir(exist_ok=True)
 #=============================================================================#
 lr_grid_size   = 20
 input_channels = 6
-base_channels  = 128
+base_channels  = 16
 crop_size      = 1
 upscale_factor = 2
 style_size     = 1
@@ -51,7 +52,7 @@ generator = DMSRGenerator(
 hr_grid_size         = generator.output_size
 critic_input_size    = hr_grid_size - 2
 input_channels       = 3 + 3 + 3 + 3 + 6 + 1
-base_channels        = 128
+base_channels        = 16
 
 critic = DMSRCritic(
     critic_input_size, 
@@ -81,8 +82,21 @@ optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
 #=============================================================================#
 #                           Training Dataset
 #=============================================================================#
-data_directory = Path('../../data/dmsr_style_train/').resolve()
-batch_size = 8
+data_directory = Path('./data/test_train/')
+
+# Create a mock dataset in the specified data directory
+generate_mock_dataset(
+    data_dir           = data_directory, 
+    num_patches        = 16,
+    lr_grid_size       = lr_grid_size,
+    hr_grid_size       = hr_grid_size,
+    lr_padding         = generator.padding,
+    hr_padding         = 1,
+    include_velocities = True, 
+    include_scales     = True,
+    include_spectra    = False
+)
+batch_size = 4
 
 metadata = np.load(data_directory / 'metadata.npy', allow_pickle=True).item()
 
@@ -90,7 +104,6 @@ training_summary_stats = np.load(
     data_directory / 'summary_stats.npy', allow_pickle=True
 ).item()
 np.save(output_dir / 'normalisation.npy', training_summary_stats)
-np.save(output_dir / 'metadata.npy', metadata)
 
 dataset = PatchDataSet(
     data_dir              = data_directory,
@@ -115,7 +128,20 @@ dataloader = DataLoader(
 #=============================================================================#
 from dmsr.data_tools import SpectraDataset
 
-valid_data_directory = Path('../../data/dmsr_style_valid/').resolve()
+valid_data_directory = Path('./data/test_valid/')
+
+# Create a mock dataset in the validation data directory
+generate_mock_dataset(
+    data_dir           = valid_data_directory, 
+    num_patches        = 4,
+    lr_grid_size       = metadata['LR_patch_size'],
+    hr_grid_size       = metadata['HR_patch_size'],
+    lr_padding         = metadata['LR_padding'],
+    hr_padding         = metadata['HR_padding'],
+    include_velocities = True, 
+    include_scales     = True,
+    include_spectra    = True
+)
 
 spectra_data = SpectraDataset(
     data_dir              = valid_data_directory, 
@@ -136,19 +162,7 @@ gan.set_dataset(
 )
 gan.set_optimizer(optimizer_c, optimizer_g)
 
-#=============================================================================#
-#                              Optimizers
-#=============================================================================#
-# model_dir = Path('./nn_run_b/checkpoints/current_model/')
-# gan.load(model_dir)
-
-# lr_G = 0.000001
-# for g in gan.optimizer_g.param_groups:
-#     g['lr'] = lr_G
-    
-# lr_C = 0.000002
-# for g in gan.optimizer_c.param_groups:
-#     g['lr'] = lr_G
+# gan.load('./velocity_run/checkpoints/current_model/')
 
 
 #=============================================================================#
@@ -174,15 +188,15 @@ monitors = {
         samples_dir      = output_dir / 'samples_1/'
     ),
     
-    'samples_monitor_191' : SamplesMonitor(
+    'samples_monitor_3' : SamplesMonitor(
         gan,
         valid_data_directory,
-        patch_number     = 191,
+        patch_number     = 3,
         device           = device,
         velocities       = True,
         scale_factors    = True,
         summary_stats    = training_summary_stats,
-        samples_dir      = output_dir / 'samples_191/'
+        samples_dir      = output_dir / 'samples_1/'
     ),
     
     'checkpoint_monitor' : CheckpointMonitor(
@@ -239,5 +253,5 @@ gan.set_monitor(monitor_manager)
 #                           WGAN Training
 #=============================================================================#
 
-num_epochs = 512
+num_epochs = 2
 gan.train(num_epochs)
