@@ -24,7 +24,6 @@ class SamplesMonitor(Monitor):
             gan,
             data_directory,
             patch_number,
-            device,
             velocities    = False,
             scale_factors = False,
             summary_stats = None,
@@ -32,8 +31,8 @@ class SamplesMonitor(Monitor):
             seed          = 42
         ):
         
-        self.device = device
-        self.generator = gan.generator
+        self.device = gan.device
+        self.generator = gan.generator.module
         self.summary_stats = summary_stats
         
         lr_sample, hr_sample, style = self.get_sample(
@@ -44,8 +43,8 @@ class SamplesMonitor(Monitor):
         self.hr_sample = hr_sample
         self.style = style
         
-        torch_generator = torch.Generator(device).manual_seed(seed)
-        z = self.generator.sample_latent_space(1, device, torch_generator)
+        torch_generator = torch.Generator(self.device).manual_seed(seed)
+        z = self.generator.sample_latent_space(1, self.device, torch_generator)
         self.z = [(z0.cpu(), z1.cpu()) for z0, z1 in z]
         
         self.samples_dir = samples_dir

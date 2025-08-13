@@ -34,12 +34,23 @@ class DMSRGenerator(nn.Module):
         self.grid_size      = grid_size
         self.input_channels = input_channels
         self.base_channels  = base_channels
-        self.scale_factor   = scale_factor
         self.crop_size      = crop_size
+        self.scale_factor   = scale_factor
         self.style_size     = style_size
         
         self.build_generator_components()
         self.compute_input_padding()
+        
+        
+    def get_arch_params(self):
+        return {
+            'grid_size'      : self.grid_size,
+            'input_channels' : self.input_channels,
+            'base_channels'  : self.base_channels,
+            'crop_size'      : self.crop_size,
+            'scale_factor'   : self.scale_factor,
+            'style_size'     : self.style_size
+        }
 
 
     def build_generator_components(self):

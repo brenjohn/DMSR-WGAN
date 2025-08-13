@@ -34,6 +34,7 @@ class MonitorManager():
     def __init__(self, report_rate, device):
         self.device = device
         self.report_rate = report_rate
+        self.monitors = {}
         
     
     def set_monitors(self, monitors):
@@ -89,10 +90,11 @@ class MonitorManager():
             time_prev = self.batch_start_time
             average_batch_time = (time_curr - time_prev) / self.report_rate
             
-            report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
+            report  = f"[Device {self.device}]"
+            report += f"[Epoch {epoch:04}/{self.num_epochs}]"
             report += f"[Batch {batch:03}/{self.num_batches}]"
             report += f"[time per batch: {average_batch_time*1000:.4f} ms]"
             report += monitor_report
             
-            print(report)
+            print(report, flush=True)
             self.batch_start_time = time.time()

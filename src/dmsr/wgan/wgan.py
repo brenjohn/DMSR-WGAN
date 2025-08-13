@@ -8,12 +8,17 @@ Created on Wed Sep 25 10:34:12 2024
 This file define the DMSR-WGAN class.
 """
 
+import torch.distributed as dist
+
 from pathlib import Path
 from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from ..data_tools.resize import crop
+from .critic import DMSRCritic
+from .generator import DMSRGenerator
 
 
 class DMSRWGAN:
@@ -29,13 +34,13 @@ class DMSRWGAN:
         self.device = device
         self.gradient_penalty_rate = gradient_penalty_rate
         self.batch_counter = 0
-        self.scale_factor = generator.scale_factor
+        self.scale_factor = generator.module.scale_factor
         self.mse_loss = MSELoss()
         
-        self._compute_crop_sizes()
+        self.compute_crop_sizes()
         
         
-    def _compute_crop_sizes(self):
+    def compute_crop_sizes(self):
         """
         To condition the critic model on lr data, the lr data needs to be
         upscaled using linear interpolation. On top of this, the data needs to
@@ -43,10 +48,10 @@ class DMSRWGAN:
         the data. This method computes the crop sizes for these operations
         using the input sizes of the generator and critic models.
         """
-        lr_size = self.generator.grid_size
-        hr_size = self.critic.input_size
-        hr_size += 2 * self.critic.use_nn_distance_features
-        scale = self.generator.scale_factor
+        lr_size = self.generator.module.grid_size
+        hr_size = self.critic.module.input_size
+        hr_size += 2 * self.critic.module.use_nn_distance_features
+        scale = self.scale_factor
         
         # Calculate the crop size for the lr data.
         self.lr_crop_size = (lr_size - hr_size // scale) // 2
@@ -85,6 +90,8 @@ class DMSRWGAN:
         self.monitor.init_monitoring(num_epochs, len(self.data))
         
         for epoch in range(num_epochs):
+            self.data.sampler.set_epoch(epoch)
+            
             for batch_num, batch in enumerate(self.data):
                 losses = train_step(*batch)
                 
@@ -110,7 +117,7 @@ class DMSRWGAN:
             style = style.to(self.device)
         
         # Use the generator to create fake data.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        z = self.generator.module.sample_latent_space(self.batch_size, self.device)
         sr_batch = self.generator(lr_batch, z, style)
         
         # Compute the loss and update the generator parameters.
@@ -176,17 +183,18 @@ class DMSRWGAN:
         """Train step for the critic.
         """
         self.optimizer_c.zero_grad()
+        batch_size, device = self.batch_size, self.device
         
         # Create fake data using the generator.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
-        fake_data = self.critic.prepare_batch(
+        fake_data = self.critic.module.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
         fake_data = tuple(tensor.detach() for tensor in fake_data)
         
         # Prepare real data.
-        real_data = self.critic.prepare_batch(
+        real_data = self.critic.module.prepare_batch(
             hr_batch, us_batch, self.box_size
         )
         real_data = tuple(tensor.detach() for tensor in real_data)
@@ -199,8 +207,8 @@ class DMSRWGAN:
         
         # Add the gradient penalty term to the loss.
         if self.batch_counter % self.gradient_penalty_rate == 0:
-            gradient_penalty = self.critic.gradient_penalty(
-                self.batch_size, *real_data, *fake_data, style, self.device
+            gradient_penalty = self.critic.module.gradient_penalty(
+                batch_size, *real_data, *fake_data, style, device
             )
             losses['gradient_penalty'] = gradient_penalty.item()
         else:
@@ -219,11 +227,12 @@ class DMSRWGAN:
         """Train step for the generator.
         """
         self.optimizer_g.zero_grad()
+        batch_size, device = self.batch_size, self.device
         
         # Use the generator to create fake data.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
-        fake_data = self.critic.prepare_batch(
+        fake_data = self.critic.module.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
         
@@ -249,20 +258,33 @@ class DMSRWGAN:
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
+        if not (dist.get_rank() == 0):
+            return
+        
         model_dir.mkdir(parents=True, exist_ok=True)
-
-        save(self.critic, model_dir / 'critic.pth')
-        save(self.generator, model_dir / 'generator.pth')
-
+        
+        # Save the model state dictionaries
+        save(self.critic.module.state_dict(), model_dir / 'critic.pth')
+        save(self.generator.module.state_dict(), model_dir / 'generator.pth')
+        
+        # Save the architecture metadata
+        gen_arch_metadata = self.generator.module.get_arch_params()
+        save(gen_arch_metadata, model_dir / 'gen_arch_metadata.pth')
+        
+        crit_arch_metadata = self.critic.module.get_arch_params()
+        save(crit_arch_metadata, model_dir / 'crit_arch_metadata.pth')
+        
+        # Save optimizer states
         optimizer_states = {
-            'optimizer_c' : self.optimizer_c.state_dict(),
-            'optimizer_g' : self.optimizer_g.state_dict()
+            'optimizer_c': self.optimizer_c.state_dict(),
+            'optimizer_g': self.optimizer_g.state_dict()
         }
         save(optimizer_states, model_dir / 'optimizers.pth')
         
+        # Save other attributes
         attributes = {
-            'batch_counter'         : self.batch_counter,
-            'gradient_penalty_rate' : self.gradient_penalty_rate
+            'batch_counter': self.batch_counter,
+            'gradient_penalty_rate': self.gradient_penalty_rate
         }
         save(attributes, model_dir / 'attributes.pth')
         
@@ -270,22 +292,34 @@ class DMSRWGAN:
     def load(self, model_dir):
         """Load a saved model
         """
-        self.critic = load(model_dir / 'critic.pth', weights_only=False)
-        self.generator = load(model_dir / 'generator.pth', weights_only=False)
+        dest = {'cuda:%d' % 0: 'cuda:%d' % self.device.index}
         
-        # Here we create new instances of the optimizers to update the weights
-        # of the new models just created.
-        optimizer_type = type(self.optimizer_c)
-        self.optimizer_c = optimizer_type(self.critic.parameters())
+        # Load the generator model.
+        arch = load(model_dir / 'gen_arch_metadata.pth', map_location=dest)
+        generator = DMSRGenerator(**arch).to(self.device)
+        self.generator = DDP(generator, device_ids=[self.device.index])
+        gen_state_dict = load(model_dir / 'generator.pth', map_location=dest)
+        self.generator.module.load_state_dict(gen_state_dict)
         
-        optimizer_type = type(self.optimizer_g)
-        self.optimizer_g = optimizer_type(self.generator.parameters())
+        # Load the critic model.
+        arch = load(model_dir / 'crit_arch_metadata.pth', map_location=dest)
+        critic = DMSRCritic(**arch).to(self.device)
+        self.critic = DDP(critic, device_ids=[self.device.index])
+        crit_state_dict = load(model_dir / 'critic.pth', map_location=dest)
+        self.critic.module.load_state_dict(crit_state_dict)
         
-        # Now load the saved state of the optimizers.
-        optimizers = load(model_dir / 'optimizers.pth', weights_only=False)
+        # Load optimizers.
+        optimizer_type_c = type(self.optimizer_c)
+        self.optimizer_c = optimizer_type_c(self.critic.parameters())
+        optimizer_type_g = type(self.optimizer_g)
+        self.optimizer_g = optimizer_type_g(self.generator.parameters())
+        optimizers = load(model_dir / 'optimizers.pth', map_location=dest)
         self.optimizer_c.load_state_dict(optimizers['optimizer_c'])
         self.optimizer_g.load_state_dict(optimizers['optimizer_g'])
         
         # Load any additional attributes that were saved.
-        attributes = load(model_dir / 'attributes.pth', weights_only=False)
+        attributes = load(model_dir / 'attributes.pth', map_location=dest)
         vars(self).update(attributes)
+        
+        # Ensure all processes have loaded the state before continuing.
+        dist.barrier()

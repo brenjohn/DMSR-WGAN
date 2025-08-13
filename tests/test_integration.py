@@ -146,3 +146,24 @@ class TestTrainingIntegrationTest(unittest.TestCase):
         
         samples_path = self.test_output_dir / 'test_run/samples_1'
         self.assertTrue(samples_path.exists(), "No samples generated")
+        
+        
+    def test_ddp_training(self):
+        result = subprocess.run(
+            ['python', '../training_examples/ddp_training.py'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=self.test_output_dir
+        )
+        
+        if self.show_output:
+            print("\n--- DDP test STDOUT ---\n", result.stdout)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        
+        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
+        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
+        
+        samples_path = self.test_output_dir / 'test_run/samples_1'
+        self.assertTrue(samples_path.exists(), "No samples generated")

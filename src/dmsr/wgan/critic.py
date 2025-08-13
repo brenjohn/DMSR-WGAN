@@ -40,18 +40,29 @@ class DMSRCritic(nn.Module):
         self.input_size = input_size
         self.input_channels = input_channels
         self.base_channels = base_channels
+        self.density_scale = density_scale_factor
         self.style_size = style_size
         self.use_nn_distance_features = use_nn_distance_features
         self.build_critic_components()
         
         if density_scale_factor is not None:
-            self.density_scale = density_scale_factor
             self.density_size = density_scale_factor * input_size
             self.prepare_batch = self.prepare_batch_hr
         elif use_nn_distance_features:
             self.prepare_batch = self.prepare_batch_nn
         else:
             self.prepare_batch = self.prepare_batch_lr_hr
+            
+            
+    def get_arch_params(self):
+        return {
+            'input_size'               : self.input_size,
+            'input_channels'           : self.input_channels,
+            'base_channels'            : self.base_channels,
+            'style_size'               : self.style_size,
+            'density_scale_factor'     : self.density_scale,
+            'use_nn_distance_features' : self.use_nn_distance_features
+        }
     
         
     def layer_channels_and_sizes(self):
