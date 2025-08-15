@@ -57,19 +57,6 @@ critic.to(device)
 
 
 #=============================================================================#
-#                              Optimizers
-#=============================================================================#
-b1 = 0.0
-b2 = 0.99
-
-lr_G = 0.00001
-optimizer_g = optim.Adam(generator.parameters(), lr=lr_G, betas=(b1, b2))
-
-lr_C = 0.00002
-optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
-
-
-#=============================================================================#
 #                           Training Dataset
 #=============================================================================#
 data_directory = Path('./data/test_train/')
@@ -149,7 +136,13 @@ gan.set_dataset(
     batch_size, 
     box_size / training_summary_stats['HR_Coordinates_std']
 )
-gan.set_optimizer(optimizer_c, optimizer_g)
+
+gan.set_optimizers(
+    lr_G = 0.00001,
+    lr_C = 0.00002,
+    b1   = 0.0,
+    b2   = 0.99
+)
 
 
 #=============================================================================#
@@ -170,7 +163,6 @@ monitors = {
         gan,
         valid_data_directory,
         patch_number  = 1,
-        device        = device,
         velocities    = True,
         scale_factors = False,
         samples_dir   = output_dir / 'samples/'
@@ -188,7 +180,6 @@ monitors = {
         HR_patch_size,
         HR_mass,
         training_summary_stats,
-        device,
         checkpoint_dir = checkpoint_dir
     )
 }

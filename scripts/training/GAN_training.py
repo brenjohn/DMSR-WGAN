@@ -167,7 +167,6 @@ monitors = {
         gan,
         valid_data_directory,
         patch_number     = 1,
-        device           = device,
         velocities       = True,
         scale_factors    = True,
         summary_stats    = training_summary_stats,
@@ -178,7 +177,6 @@ monitors = {
         gan,
         valid_data_directory,
         patch_number     = 191,
-        device           = device,
         velocities       = True,
         scale_factors    = True,
         summary_stats    = training_summary_stats,
@@ -197,7 +195,6 @@ monitors = {
         metadata['HR_patch_size'],
         metadata['HR_mass'],
         training_summary_stats,
-        device,
         checkpoint_dir = checkpoint_dir
     )
 }

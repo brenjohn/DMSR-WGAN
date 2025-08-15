@@ -12,6 +12,15 @@ data.
 import numpy as np
 
 
+def particle_grid_indices(ids, grid_size):
+    """Use the particle IDs to compute particle grid indices (ix, iy, iz).
+    """
+    ix = ids // (grid_size * grid_size)
+    iy = (ids % (grid_size * grid_size)) // grid_size
+    iz = ids % grid_size
+    return ix.astype(np.int64), iy.astype(np.int64), iz.astype(np.int64)
+
+
 def get_displacement_field(positions, ids, box_size, grid_size):
     """Creates a displacement field from the given particle positions and
     particle IDs.
@@ -22,10 +31,7 @@ def get_displacement_field(positions, ids, box_size, grid_size):
         
         ID = iz + grid_size * (iy + grid_size * ix)
     """
-    # Use the particle IDs to compute particle grid indices (ix, iy, iz).
-    ix = ids // (grid_size * grid_size)
-    iy = (ids % (grid_size * grid_size)) // grid_size
-    iz = ids % grid_size
+    ix, iy, iz = particle_grid_indices(ids, grid_size)
     
     # Create an array containing the postions of grid points.
     cell_size = box_size / grid_size
@@ -50,12 +56,7 @@ def get_velocity_field(velocities, ids, box_size, grid_size):
     """Creates a velocity field from the given particle velocities and
     particle IDs.
     """
-    # Use the particle IDs to compute particle grid indices (ix, iy, iz).
-    ix = ids // (grid_size * grid_size)
-    iy = (ids % (grid_size * grid_size)) // grid_size
-    iz = ids % grid_size
-    
-    # Arrange displacements into a field and return it.
+    ix, iy, iz = particle_grid_indices(ids, grid_size)
     velocity_field = np.zeros((3, grid_size, grid_size, grid_size))
     velocity_field[:, ix, iy, iz] = velocities
     return velocity_field
@@ -83,12 +84,7 @@ def get_particle_potential_field(potentials, ids, grid_size):
     """Creates a particle potential field from the given particle potentials 
     and particle IDs.
     """
-    # Use the particle IDs to compute particle grid indices (ix, iy, iz).
-    ix = ids // (grid_size * grid_size)
-    iy = (ids % (grid_size * grid_size)) // grid_size
-    iz = ids % grid_size
-    
-    # Arrange displacements into a field and return it.
+    ix, iy, iz = particle_grid_indices(ids, grid_size)
     potential_field = np.zeros((1, grid_size, grid_size, grid_size))
     potential_field[:, ix, iy, iz] = potentials
     return potential_field
