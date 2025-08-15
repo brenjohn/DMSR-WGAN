@@ -12,10 +12,8 @@ import torch
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from pathlib import Path
-from torch import optim
 from torch.utils.data import DataLoader, DistributedSampler
 
 from dmsr.wgan import DMSRWGAN, DMSRCritic, DMSRGenerator
@@ -71,7 +69,8 @@ def main(rank, world_size):
         base_channels, 
         crop_size, 
         upscale_factor, 
-        style_size
+        style_size,
+        nn_distance=True
     )
     
     hr_grid_size      = generator.output_size
@@ -91,21 +90,6 @@ def main(rank, world_size):
     generator.to(device)
     critic.to(device)
 
-    # Wrap models with DDP
-    generator = DDP(generator, device_ids=[device])
-    critic = DDP(critic, device_ids=[device])
-
-    #=========================================================================#
-    #                            Optimizers
-    #=========================================================================#
-    b1, b2 = 0.0, 0.99
-    
-    lr_G = 0.00001
-    optimizer_g = optim.Adam(generator.parameters(), lr=lr_G, betas=(b1, b2))
-    
-    lr_C = 0.00002
-    optimizer_c = optim.Adam(critic.parameters(), lr=lr_C, betas=(b1, b2))
-
 
     #=========================================================================#
     #                          Training Dataset
@@ -117,7 +101,7 @@ def main(rank, world_size):
             num_patches        = 16,
             lr_grid_size       = lr_grid_size,
             hr_grid_size       = hr_grid_size,
-            lr_padding         = generator.module.padding,
+            lr_padding         = generator.padding,
             hr_padding         = 0,
             include_velocities = True, 
             include_scales     = True,
@@ -161,16 +145,24 @@ def main(rank, world_size):
         sampler=sampler
     )
 
+
     #=========================================================================#
     #                          DMSR WGAN Setup
     #=========================================================================#
     gan = DMSRWGAN(generator, critic, device)
+    
     gan.set_dataset(
         dataloader, 
         batch_size, 
         metadata['box_size'] / training_summary_stats['HR_Coordinates_std']
     )
-    gan.set_optimizer(optimizer_c, optimizer_g)
+    
+    gan.set_optimizers(
+        lr_G = 0.00001,
+        lr_C = 0.00002,
+        b1   = 0.0,
+        b2   = 0.99
+    )
 
 
     #=========================================================================#
@@ -238,6 +230,10 @@ def main(rank, world_size):
     #=========================================================================#
     gan.train(num_epochs)
     cleanup_ddp()
+    
+    # Additional test for the load method.
+    if is_main_process:
+        gan = DMSRWGAN.load(checkpoint_dir / 'current_model', device)
 
 
 if __name__ == '__main__':

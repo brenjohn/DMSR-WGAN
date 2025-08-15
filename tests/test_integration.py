@@ -150,7 +150,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
         
     def test_ddp_training(self):
         result = subprocess.run(
-            ['python', '../training_examples/ddp_training.py'],
+            ['python', '../training_examples/distributed_training.py'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -158,7 +158,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
         )
         
         if self.show_output:
-            print("\n--- DDP test STDOUT ---\n", result.stdout)
+            print("\n--- Distributed test STDOUT ---\n", result.stdout)
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         

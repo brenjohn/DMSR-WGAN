@@ -11,6 +11,9 @@ This file defines the generator model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import randn
+from torch import save, load
+from pathlib import Path
+
 from ..data_tools import crop
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import HBlock
@@ -28,6 +31,7 @@ class DMSRGenerator(nn.Module):
             crop_size=0,
             scale_factor=4,
             style_size=None,
+            nn_distance=False,
             **kwargs
         ):
         super().__init__()
@@ -37,6 +41,7 @@ class DMSRGenerator(nn.Module):
         self.crop_size      = crop_size
         self.scale_factor   = scale_factor
         self.style_size     = style_size
+        self.nn_distance    = nn_distance
         
         self.build_generator_components()
         self.compute_input_padding()
@@ -49,7 +54,8 @@ class DMSRGenerator(nn.Module):
             'base_channels'  : self.base_channels,
             'crop_size'      : self.crop_size,
             'scale_factor'   : self.scale_factor,
-            'style_size'     : self.style_size
+            'style_size'     : self.style_size,
+            'nn_distance'    : self.nn_distance
         }
 
 
@@ -118,12 +124,14 @@ class DMSRGenerator(nn.Module):
         version of the inner region. This method computes the sizes of these 
         regions.
         """
-        if self.output_size % self.scale_factor != 0:
+        output_size = self.output_size + 2 * self.nn_distance
+        if output_size % self.scale_factor != 0:
             print('WARNING: inner region of generator input not an integer')
-        self.inner_region = self.output_size // self.scale_factor
+        self.inner_region = output_size // self.scale_factor
         
         if (self.grid_size - self.inner_region) % 2 != 0:
             print('WARNING: padding of generator input not an integer')
+            print(f'grid = {self.grid_size}, inner = {self.inner_region}')
         self.padding = (self.grid_size - self.inner_region) // 2
 
 
@@ -155,3 +163,36 @@ class DMSRGenerator(nn.Module):
             latent_variable[i] = noise
             
         return latent_variable
+    
+    
+    #=========================================================================#
+    #                         Saving and Loading
+    #=========================================================================#
+    
+    def save(self, model_dir=Path('./data/model/')):
+        """Save the model state dictionary and architecture metadata.
+        """
+        model_dir.mkdir(parents=True, exist_ok=True)
+        save(self.state_dict(), model_dir / 'generator.pth')
+        gen_arch_metadata = self.get_arch_params()
+        save(gen_arch_metadata, model_dir / 'gen_arch.pth')
+    
+    
+    @classmethod
+    def load(cls, model_dir, device):
+        """Load a saved model
+        """
+        # Load the generator model.
+        arch = load(
+            model_dir / 'gen_arch.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        gen_state_dict = load(
+            model_dir / 'generator.pth', 
+            map_location=device, 
+            weights_only=True
+        )
+        generator = DMSRGenerator(**arch).to(device)
+        generator.load_state_dict(gen_state_dict)
+        return generator

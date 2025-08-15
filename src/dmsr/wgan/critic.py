@@ -10,7 +10,10 @@ This file defines the critic model used by the DMSR-WGAN model.
 
 import torch.nn as nn
 
+from torch import save, load
 from torch import concat, rand, autograd
+from pathlib import Path
+
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 from ..field_analysis import cic_density_field
@@ -226,3 +229,35 @@ class DMSRCritic(nn.Module):
             + 0 * score
         )
         return penalty
+    
+    
+    #=========================================================================#
+    #                         Saving and Loading
+    #=========================================================================#
+    
+    def save(self, model_dir=Path('./data/model/')):
+        """Save the model state dictionary and architecture metadata.
+        """
+        model_dir.mkdir(parents=True, exist_ok=True)
+        save(self.state_dict(), model_dir / 'critic.pth')
+        crit_arch_metadata = self.get_arch_params()
+        save(crit_arch_metadata, model_dir / 'crit_arch.pth')
+    
+    
+    @classmethod
+    def load(cls, model_dir, device):
+        """Load a saved model
+        """
+        arch = load(
+            model_dir / 'crit_arch.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        crit_state_dict = load(
+            model_dir / 'critic.pth', 
+            map_location=device, 
+            weights_only=True
+        )
+        critic = DMSRCritic(**arch).to(device)
+        critic.load_state_dict(crit_state_dict)
+        return critic

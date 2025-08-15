@@ -10,11 +10,11 @@ a low-resolution swift snapshot.
 """
 
 import time
-import torch
 import argparse
 import numpy as np
 
 from pathlib import Path
+from dmsr.wgan import DMSRGenerator
 from swift_tools.enhance import enhance
 
 
@@ -37,7 +37,7 @@ def main(
     print(f"Using device: {device}")
     
     # Load the generator model and sample its latent space.
-    generator = torch.load(model_dir / 'generator.pth').to(device)
+    generator = DMSRGenerator.load(model_dir, device)
     z = generator.sample_latent_space(1, device)
     
     # Load any scaling parameters if they exist.
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--model_dir', 
         type=Path, 
-        default='./dmsr_model/current_model/',
+        default='./dmsr_model/',
         help="Path to the directory containing the generator model."
     )
     parser.add_argument(

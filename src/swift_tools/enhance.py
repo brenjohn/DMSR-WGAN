@@ -18,6 +18,7 @@ import numpy as np
 from .fields import get_positions
 from .fields import get_displacement_field, get_velocity_field
 from .fields import cut_field, stitch_fields
+from dmsr.data_tools import crop
 
 
 def enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device):
@@ -64,12 +65,9 @@ def update_particle_data(
     """
     Use the given generator to upscale the particle data in the given file.
     """
-    generator.compute_input_padding()
     cut_size           = generator.inner_region
-    output_size        = generator.output_size
     pad                = generator.padding
     scale_factor       = generator.scale_factor
-    # z                  = generator.sample_latent_space(1, device)
     upscale_velocities = generator.input_channels == 6
     
     lr_position_std = scale_params.get('LR_disp_fields_std', 1)
@@ -105,10 +103,13 @@ def update_particle_data(
         patch = torch.from_numpy(patch).float()
         sr_patch = generator(patch[None, ...], z, cosmic_scale_factor)
         sr_patch = sr_patch.detach()
+        if generator.nn_distance:
+            sr_patch = crop(sr_patch, 1)
         sr_patches.append(sr_patch.numpy())
     del fields
     
     sr_grid_size = scale_factor * grid_size
+    output_size = sr_patches[0].shape[-1]
     patches_per_dim = sr_grid_size // output_size
     volume_covered = sr_grid_size == patches_per_dim * output_size
     assert volume_covered, 'Volume not covered by SR patches'

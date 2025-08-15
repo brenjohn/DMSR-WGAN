@@ -36,7 +36,7 @@ class SpectrumMonitor(Monitor):
             checkpoint_dir
         ):
         self.gan = gan
-        self.generator = gan.generator
+        self.generator = gan.generator.module
         self.box_size = box_size
         self.grid_size = grid_size
         self.particle_mass = particle_mass
@@ -82,7 +82,7 @@ class SpectrumMonitor(Monitor):
         
         for lr_sample, hr_spectrum, style in self.data:
             # Generate fake data and get its power spectrum.
-            z = self.generator.module.sample_latent_space(1, self.device)
+            z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z, style)
             displacements = sr_sample[:, 0:3, ...].detach()
             displacements *= self.summary_stats['HR_Coordinates_std']

@@ -54,7 +54,7 @@ class MonitorManager():
         """Calls the `post_epoch_processing` method of each monitor.
         """
         epoch_time = time.time() - self.epoch_start_time
-        print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
+        print(f"[{self.device}][Epoch {epoch} took: {epoch_time:.4f} sec]")
         post_processing_start_time = time.time()
         
         for monitor in self.monitors.values():
@@ -63,10 +63,9 @@ class MonitorManager():
         self.epoch_start_time = time.time()
         self.batch_start_time = time.time()
         post_processing_time = time.time() - post_processing_start_time
-        print(
-            f"[Epoch post-processing took: {post_processing_time:.4f} sec]",
-            flush=True
-        )
+        message = f'[{self.device}]'
+        message += f'[Epoch post-processing: {post_processing_time:.4f} sec]'
+        print(message, flush=True)
     
         
     def end_of_batch(self, epoch, batch, batch_counter, losses):
@@ -90,7 +89,7 @@ class MonitorManager():
             time_prev = self.batch_start_time
             average_batch_time = (time_curr - time_prev) / self.report_rate
             
-            report  = f"[Device {self.device}]"
+            report  = f"[{self.device}]"
             report += f"[Epoch {epoch:04}/{self.num_epochs}]"
             report += f"[Batch {batch:03}/{self.num_batches}]"
             report += f"[time per batch: {average_batch_time*1000:.4f} ms]"

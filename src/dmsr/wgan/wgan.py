@@ -11,6 +11,7 @@ This file define the DMSR-WGAN class.
 import torch.distributed as dist
 
 from pathlib import Path
+from torch import optim
 from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
@@ -19,6 +20,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from ..data_tools.resize import crop
 from .critic import DMSRCritic
 from .generator import DMSRGenerator
+from .serial_container import SerialContainer
 
 
 class DMSRWGAN:
@@ -28,14 +30,27 @@ class DMSRWGAN:
     Generative Adversarial Neural Networks.
     """
     
-    def __init__(self, generator, critic, device, gradient_penalty_rate=16):
-        self.generator = generator
-        self.critic = critic
+    def __init__(
+            self, 
+            generator, 
+            critic, 
+            device, 
+            gradient_penalty_rate=16,
+            distributed=False
+        ):
         self.device = device
         self.gradient_penalty_rate = gradient_penalty_rate
+        self.distributed = distributed
         self.batch_counter = 0
-        self.scale_factor = generator.module.scale_factor
+        self.scale_factor = generator.scale_factor
         self.mse_loss = MSELoss()
+        
+        if distributed:
+            self.generator = DDP(generator, device_ids=[device])
+            self.critic = DDP(critic, device_ids=[device])
+        else:
+            self.generator = SerialContainer(generator)
+            self.critic = SerialContainer(critic)
         
         self.compute_crop_sizes()
         
@@ -72,9 +87,13 @@ class DMSRWGAN:
         self.batch_size = batch_size
         
         
-    def set_optimizer(self, optimizer_c, optimizer_g):
-        self.optimizer_c = optimizer_c
-        self.optimizer_g = optimizer_g
+    def set_optimizers(self, lr_G=0.000001, lr_C=0.000002, b1=0.0, b2=0.99):
+        self.optimizer_g = optim.Adam(
+            self.generator.parameters(), lr=lr_G, betas=(b1, b2)
+        )
+        self.optimizer_c = optim.Adam(
+            self.critic.parameters(), lr=lr_C, betas=(b1, b2)
+        )
         
     
     def set_monitor(self, monitor):
@@ -90,7 +109,9 @@ class DMSRWGAN:
         self.monitor.init_monitoring(num_epochs, len(self.data))
         
         for epoch in range(num_epochs):
-            self.data.sampler.set_epoch(epoch)
+            if self.distributed:
+                self.data.sampler.set_epoch(epoch)
+                dist.barrier()
             
             for batch_num, batch in enumerate(self.data):
                 losses = train_step(*batch)
@@ -103,6 +124,9 @@ class DMSRWGAN:
                     
             # End of epoch processing.
             self.monitor.end_of_epoch(epoch)
+            
+        if self.distributed:
+            dist.barrier()
     
         
     #=========================================================================#
@@ -117,7 +141,8 @@ class DMSRWGAN:
             style = style.to(self.device)
         
         # Use the generator to create fake data.
-        z = self.generator.module.sample_latent_space(self.batch_size, self.device)
+        batch_size, device = self.batch_size, self.device
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
         
         # Compute the loss and update the generator parameters.
@@ -258,21 +283,15 @@ class DMSRWGAN:
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
-        if not (dist.get_rank() == 0):
-            return
+        if self.distributed:
+            if not (dist.get_rank() == 0):
+                return
         
         model_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save the model state dictionaries
-        save(self.critic.module.state_dict(), model_dir / 'critic.pth')
-        save(self.generator.module.state_dict(), model_dir / 'generator.pth')
-        
-        # Save the architecture metadata
-        gen_arch_metadata = self.generator.module.get_arch_params()
-        save(gen_arch_metadata, model_dir / 'gen_arch_metadata.pth')
-        
-        crit_arch_metadata = self.critic.module.get_arch_params()
-        save(crit_arch_metadata, model_dir / 'crit_arch_metadata.pth')
+        # Save the models.
+        self.critic.module.save(model_dir)
+        self.generator.module.save(model_dir)
         
         # Save optimizer states
         optimizer_states = {
@@ -288,38 +307,32 @@ class DMSRWGAN:
         }
         save(attributes, model_dir / 'attributes.pth')
         
-        
-    def load(self, model_dir):
+    
+    @classmethod
+    def load(cls, model_dir, device, distributed = False):
         """Load a saved model
         """
-        dest = {'cuda:%d' % 0: 'cuda:%d' % self.device.index}
-        
-        # Load the generator model.
-        arch = load(model_dir / 'gen_arch_metadata.pth', map_location=dest)
-        generator = DMSRGenerator(**arch).to(self.device)
-        self.generator = DDP(generator, device_ids=[self.device.index])
-        gen_state_dict = load(model_dir / 'generator.pth', map_location=dest)
-        self.generator.module.load_state_dict(gen_state_dict)
-        
-        # Load the critic model.
-        arch = load(model_dir / 'crit_arch_metadata.pth', map_location=dest)
-        critic = DMSRCritic(**arch).to(self.device)
-        self.critic = DDP(critic, device_ids=[self.device.index])
-        crit_state_dict = load(model_dir / 'critic.pth', map_location=dest)
-        self.critic.module.load_state_dict(crit_state_dict)
+        # Load the generator and critic models. Then create a WGAN instance.
+        generator = DMSRGenerator.load(model_dir, device)
+        critic = DMSRCritic.load(model_dir, device)
+        gan = cls(generator, critic, device, distributed=distributed)
         
         # Load optimizers.
-        optimizer_type_c = type(self.optimizer_c)
-        self.optimizer_c = optimizer_type_c(self.critic.parameters())
-        optimizer_type_g = type(self.optimizer_g)
-        self.optimizer_g = optimizer_type_g(self.generator.parameters())
-        optimizers = load(model_dir / 'optimizers.pth', map_location=dest)
-        self.optimizer_c.load_state_dict(optimizers['optimizer_c'])
-        self.optimizer_g.load_state_dict(optimizers['optimizer_g'])
+        optimizers = load(
+            model_dir / 'optimizers.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        gan.set_optimizers()
+        gan.optimizer_c.load_state_dict(optimizers['optimizer_c'])
+        gan.optimizer_g.load_state_dict(optimizers['optimizer_g'])
         
         # Load any additional attributes that were saved.
-        attributes = load(model_dir / 'attributes.pth', map_location=dest)
-        vars(self).update(attributes)
+        attributes = load(
+            model_dir / 'attributes.pth', 
+            map_location=device,
+            weights_only=False
+        )
+        vars(gan).update(attributes)
         
-        # Ensure all processes have loaded the state before continuing.
-        dist.barrier()
+        return gan
