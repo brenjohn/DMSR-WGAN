@@ -33,28 +33,27 @@ class SpectrumMonitor(Monitor):
             grid_size,
             particle_mass,
             summary_stats,
-            device,
             checkpoint_dir
         ):
         self.gan = gan
-        self.generator = gan.generator
+        self.generator = gan.generator.module
         self.box_size = box_size
         self.grid_size = grid_size
         self.particle_mass = particle_mass
         self.summary_stats = summary_stats
         self.num_samples = len(dataset)
-        self.device = device
+        self.device = gan.device
         self.checkpoint_dir = checkpoint_dir
         
         # Create a collate function to move data to the device and return a
         # default style variable (None).
         def collate(batch):
             batch = list(zip(*batch))
-            lr_sample  = default_collate(batch[0]).to(device)
-            hr_spectra = default_collate(batch[1]).to(device)
+            lr_sample  = default_collate(batch[0]).to(self.device)
+            hr_spectra = default_collate(batch[1]).to(self.device)
             style = (
                 None if batch[2][0] is None 
-                else default_collate(batch[2]).to(device)
+                else default_collate(batch[2]).to(self.device)
             )
             return lr_sample, hr_spectra, style
         

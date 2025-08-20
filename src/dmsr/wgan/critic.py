@@ -10,7 +10,10 @@ This file defines the critic model used by the DMSR-WGAN model.
 
 import torch.nn as nn
 
+from torch import save, load
 from torch import concat, rand, autograd
+from pathlib import Path
+
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
 from ..field_analysis import cic_density_field
@@ -40,18 +43,29 @@ class DMSRCritic(nn.Module):
         self.input_size = input_size
         self.input_channels = input_channels
         self.base_channels = base_channels
+        self.density_scale = density_scale_factor
         self.style_size = style_size
         self.use_nn_distance_features = use_nn_distance_features
         self.build_critic_components()
         
         if density_scale_factor is not None:
-            self.density_scale = density_scale_factor
             self.density_size = density_scale_factor * input_size
             self.prepare_batch = self.prepare_batch_hr
         elif use_nn_distance_features:
             self.prepare_batch = self.prepare_batch_nn
         else:
             self.prepare_batch = self.prepare_batch_lr_hr
+            
+            
+    def get_arch_params(self):
+        return {
+            'input_size'               : self.input_size,
+            'input_channels'           : self.input_channels,
+            'base_channels'            : self.base_channels,
+            'style_size'               : self.style_size,
+            'density_scale_factor'     : self.density_scale,
+            'use_nn_distance_features' : self.use_nn_distance_features
+        }
     
         
     def layer_channels_and_sizes(self):
@@ -215,3 +229,35 @@ class DMSRCritic(nn.Module):
             + 0 * score
         )
         return penalty
+    
+    
+    #=========================================================================#
+    #                         Saving and Loading
+    #=========================================================================#
+    
+    def save(self, model_dir=Path('./data/model/')):
+        """Save the model state dictionary and architecture metadata.
+        """
+        model_dir.mkdir(parents=True, exist_ok=True)
+        save(self.state_dict(), model_dir / 'critic.pth')
+        crit_arch_metadata = self.get_arch_params()
+        save(crit_arch_metadata, model_dir / 'crit_arch.pth')
+    
+    
+    @classmethod
+    def load(cls, model_dir, device):
+        """Load a saved model
+        """
+        arch = load(
+            model_dir / 'crit_arch.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        crit_state_dict = load(
+            model_dir / 'critic.pth', 
+            map_location=device, 
+            weights_only=True
+        )
+        critic = DMSRCritic(**arch).to(device)
+        critic.load_state_dict(crit_state_dict)
+        return critic
