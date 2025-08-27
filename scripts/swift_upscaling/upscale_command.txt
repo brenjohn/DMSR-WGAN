@@ -1,0 +1,1 @@
+python swift_enhance.py --model_dir=./models/model_particle_density/ --data_dir=./swift_snapshots/064 --snapshot_pattern=snap_*.hdf5 --output_suffix=_sr
