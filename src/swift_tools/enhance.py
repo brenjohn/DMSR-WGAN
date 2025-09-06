@@ -143,7 +143,8 @@ def upscale_fields(fields, cosmic_scale_factor, z, generator, device):
     
     sr_patches = []
     with torch.no_grad():
-        for batch, in data_loader:
+        for (i, (batch,)) in enumerate(data_loader):
+            print(f"Processing batch {i+1} of {len(data_loader)}")
             batch = batch.to(device, non_blocking=True)
             sr_batch = generator(batch, z, cosmic_scale_factor)
             sr_batch = sr_batch.detach().to('cpu', non_blocking=True)
