@@ -165,6 +165,16 @@ class DMSRGenerator(nn.Module):
         return latent_variable
     
     
+    def tile_latent_variable(self, latent_variable, size, device):
+        """
+        """
+        return [(
+            noise[0].tile(size, 1, 1, 1, 1).to(device), 
+            noise[1].tile(size, 1, 1, 1, 1).to(device)
+            ) for noise in latent_variable
+        ]
+    
+    
     #=========================================================================#
     #                         Saving and Loading
     #=========================================================================#

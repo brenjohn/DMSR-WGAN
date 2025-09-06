@@ -20,6 +20,8 @@ from .fields import get_displacement_field, get_velocity_field
 from .fields import cut_field, stitch_fields
 from dmsr.data_tools import crop
 
+from torch.utils.data import DataLoader, TensorDataset
+
 
 def enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device):
     """
@@ -46,14 +48,20 @@ def enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device):
         update_potentials(dm_data, scale_factor)
         update_softenings(dm_data, scale_factor)
         update_particle_data(
-            sr_file, generator, z, scale_params, cosmic_scale_factor, device
+            sr_file, 
+            generator, 
+            z, 
+            scale_params, 
+            cosmic_scale_factor, 
+            device
         )
         
         grid_size = sr_file['ICs_parameters'].attrs['Grid Resolution']
         sr_grid_size = scale_factor * grid_size
         sr_file['ICs_parameters'].attrs['Grid Resolution'] = sr_grid_size
-    
-    
+
+
+
 def update_particle_data(
         file, 
         generator,
@@ -68,10 +76,28 @@ def update_particle_data(
     cut_size           = generator.inner_region
     pad                = generator.padding
     scale_factor       = generator.scale_factor
-    upscale_velocities = generator.input_channels == 6
+    upscale_velocities = generator.input_channels == 6 # TODO: no magic numbers
     
+    fields, grid_size, box_size = get_field_data(
+        file, scale_params, upscale_velocities, scale_factor
+    )
+    
+    fields = cut_field(fields[None, ...], cut_size, cut_size, pad)
+    
+    sr_patches = upscale_fields(
+        fields, cosmic_scale_factor, z, generator, device
+    )
+    del fields
+    
+    sr_grid_size = scale_factor * grid_size
+    write_enhanced_data(
+        file, sr_patches, sr_grid_size, upscale_velocities, scale_params
+    )
+        
+
+
+def get_field_data(file, scale_params, upscale_velocities, scale_factor):
     lr_position_std = scale_params.get('LR_disp_fields_std', 1)
-    hr_position_std = scale_params.get('HR_disp_fields_std', 1)
     
     dm_data   = file['DMParticles']
     grid_size = file['ICs_parameters'].attrs['Grid Resolution']
@@ -85,7 +111,6 @@ def update_particle_data(
     
     if upscale_velocities:
         lr_velocity_std = scale_params.get('LR_vel_fields_std', 1)
-        hr_velocity_std = scale_params.get('HR_vel_fields_std', 1)
         
         velocity = np.asarray(dm_data['Velocities'])
         velocity = velocity.transpose()
@@ -95,27 +120,59 @@ def update_particle_data(
         del velocity
     else:
         zero_particle_velocities(dm_data, scale_factor)
-    
-    fields = cut_field(fields[None, ...], cut_size, cut_size, pad)
+        
+    return fields, grid_size, box_size
 
-    sr_patches = []
-    for patch in fields:
-        patch = torch.from_numpy(patch).float()
-        sr_patch = generator(patch[None, ...], z, cosmic_scale_factor)
-        sr_patch = sr_patch.detach()
-        if generator.nn_distance:
-            sr_patch = crop(sr_patch, 1)
-        sr_patches.append(sr_patch.numpy())
+
+
+def upscale_fields(fields, cosmic_scale_factor, z, generator, device):
+    batch_size = 1
+    patches = torch.stack([
+        torch.from_numpy(patch).float() for patch in fields
+    ])
     del fields
     
-    sr_grid_size = scale_factor * grid_size
+    dataset = TensorDataset(patches)
+    data_loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, pin_memory=True
+    )
+    del patches
+    
+    cosmic_scale_factor = cosmic_scale_factor.repeat(batch_size, 1).to(device)
+    z = generator.tile_latent_variable(z, batch_size, device)
+    
+    sr_patches = []
+    with torch.no_grad():
+        for batch, in data_loader:
+            batch = batch.to(device, non_blocking=True)
+            sr_batch = generator(batch, z, cosmic_scale_factor)
+            sr_batch = sr_batch.detach().to('cpu', non_blocking=True)
+            if generator.nn_distance:
+                sr_batch = crop(sr_batch, 1)
+            sr_patches.extend([patch.numpy() for patch in sr_batch.unbind(0)])
+    
+    del dataset
+    del data_loader
+    return sr_patches
+
+
+
+def write_enhanced_data(
+        file, sr_patches, sr_grid_size, upscale_velocities, scale_params
+    ):
+    dm_data   = file['DMParticles']
+    box_size  = file['Header'].attrs['BoxSize'][0]
+    
     output_size = sr_patches[0].shape[-1]
     patches_per_dim = sr_grid_size // output_size
     volume_covered = sr_grid_size == patches_per_dim * output_size
     assert volume_covered, 'Volume not covered by SR patches'
     sr_field = stitch_fields(sr_patches, patches_per_dim)
     
+    hr_position_std = scale_params.get('HR_disp_fields_std', 1)
+    
     if upscale_velocities:
+        hr_velocity_std = scale_params.get('HR_vel_fields_std', 1)
         sr_displacement = sr_field[:3, ...] * hr_position_std
         sr_velocity     = sr_field[3:, ...] * hr_velocity_std
         sr_velocities = sr_velocity.reshape(3, -1)

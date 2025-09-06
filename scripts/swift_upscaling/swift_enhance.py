@@ -9,6 +9,7 @@ This script uses a specified dmsr generator to enhance the dark-matter data in
 a low-resolution swift snapshot.
 """
 
+import torch
 import time
 import argparse
 import numpy as np
@@ -33,11 +34,11 @@ def main(
         snapshot_pattern (str): A glob pattern for low-resolution snapshots.
         output_suffix (str): A suffix to add to enhanced snapshot filenames.
     """
-    device = "cpu"
+    device = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
     # Load the generator model and sample its latent space.
-    generator = DMSRGenerator.load(model_dir, device)
+    generator = DMSRGenerator.load(model_dir, device).eval()
     z = generator.sample_latent_space(1, device)
     
     # Load any scaling parameters if they exist.
