@@ -12,6 +12,13 @@ data.
 import numpy as np
 
 
+def particle_ids(grid_indices, grid_size):
+    """Use the grid indices (ix, iy, iz) to compute particle IDs.
+    """
+    ix, iy, iz = grid_indices[0, :], grid_indices[1, :], grid_indices[2, :]
+    return iz + iy * grid_size + ix * grid_size * grid_size
+
+
 def particle_grid_indices(ids, grid_size):
     """Use the particle IDs to compute particle grid indices (ix, iy, iz).
     """
@@ -90,7 +97,7 @@ def get_particle_potential_field(potentials, ids, grid_size):
     return potential_field
 
 
-def cut_field(fields, cut_size, stride=0, pad=0):
+def cut_field(fields, cut_size, stride=0, pad=0, return_block_indices=False):
     """Cuts the given field tensor into blocks of size `cut_size`.
     
     Arguments:
@@ -102,18 +109,24 @@ def cut_field(fields, cut_size, stride=0, pad=0):
                      extracting the next block.
         - pad      : The number of cells to pad the base blocks on each side.
         
+        - return_block_indices : Should the block indices be returned?
+        
     Returns:
         A numpy tensor containing the blocks/subfields cut from the given
         fields tensor. The shape of the returned tensor is:
                  (number_of_cuts * batch_size, channels, n, n, n),
         where number_of_cuts is the number of subfields extracted from each 
         field and n is the grid size of each subfield (ie cut_size + 2 * pad).
+        
+        If return_block_indices is true, the grid indices of the (0, 0, 0) cell
+        of each block are also returned in a (number_of_cuts, 3) numpy tensor.
     """
     grid_size = fields.shape[-1]
     if not stride:
         stride = cut_size
     
-    cuts = []
+    blocks = []
+    block_indices = []
     for i in range(0, grid_size, stride):
         slice_x = [n % grid_size for n in range(i-pad, i+cut_size+pad)]
         cut_x = np.take(fields, slice_x, axis=2)
@@ -126,9 +139,12 @@ def cut_field(fields, cut_size, stride=0, pad=0):
                 slice_z = [n % grid_size for n in range(k-pad, k+cut_size+pad)]
                 cut_z = np.take(cut_y, slice_z, axis=4)
                 
-                cuts.append(cut_z)
+                blocks.append(cut_z)
+                block_indices.append([i, j, k])
     
-    return np.concatenate(cuts)
+    if return_block_indices:
+        return np.concatenate(blocks), np.stack(block_indices)
+    return np.concatenate(blocks)
 
 
 def stitch_fields(patches, patches_per_dim):

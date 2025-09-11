@@ -15,7 +15,7 @@ import shutil
 import h5py as h5
 import numpy as np
 
-from .fields import get_positions
+from .fields import get_positions, particle_ids
 from .fields import get_displacement_field, get_velocity_field
 from .fields import cut_field, stitch_fields
 from dmsr.data_tools import crop
@@ -76,28 +76,32 @@ def update_particle_data(
     cut_size           = generator.inner_region
     pad                = generator.padding
     scale_factor       = generator.scale_factor
-    upscale_velocities = generator.input_channels == 6 # TODO: no magic numbers
+    include_velocities = generator.input_channels == 6 # TODO: no magic numbers
     
     fields, grid_size, box_size = get_field_data(
-        file, scale_params, upscale_velocities, scale_factor
+        file, scale_params, include_velocities, scale_factor
     )
     
-    fields = cut_field(fields[None, ...], cut_size, cut_size, pad)
-    
-    sr_patches = upscale_fields(
-        fields, cosmic_scale_factor, z, generator, device
+    patches, patch_inds = cut_field(
+        fields[None, ...], cut_size, cut_size, pad, return_block_indices=True
     )
-    del fields
     
-    sr_grid_size = scale_factor * grid_size
-    write_enhanced_data(
-        file, sr_patches, sr_grid_size, upscale_velocities, scale_params
+    upscale_patches(
+        file,
+        patches, 
+        patch_inds, 
+        cosmic_scale_factor, 
+        z, 
+        generator,
+        scale_params,
+        include_velocities,
+        device
     )
         
 
 
-def get_field_data(file, scale_params, upscale_velocities, scale_factor):
-    lr_position_std = scale_params.get('LR_disp_fields_std', 1)
+def get_field_data(file, scale_params, include_velocities, scale_factor):
+    lr_position_std = scale_params.get('LR_Coordinates_std', 1)
     
     dm_data   = file['DMParticles']
     grid_size = file['ICs_parameters'].attrs['Grid Resolution']
@@ -109,8 +113,8 @@ def get_field_data(file, scale_params, upscale_velocities, scale_factor):
     fields = get_displacement_field(fields, ids, box_size, grid_size)
     fields /= lr_position_std
     
-    if upscale_velocities:
-        lr_velocity_std = scale_params.get('LR_vel_fields_std', 1)
+    if include_velocities:
+        lr_velocity_std = scale_params.get('LR_Velocities_std', 1)
         
         velocity = np.asarray(dm_data['Velocities'])
         velocity = velocity.transpose()
@@ -125,75 +129,90 @@ def get_field_data(file, scale_params, upscale_velocities, scale_factor):
 
 
 
-def upscale_fields(fields, cosmic_scale_factor, z, generator, device):
-    batch_size = 1
-    patches = torch.stack([
-        torch.from_numpy(patch).float() for patch in fields
-    ])
-    del fields
+def upscale_patches(
+        file,
+        patches, 
+        patch_inds, 
+        scale_factor, 
+        z, 
+        generator, 
+        scale_params,
+        include_velocities,
+        device
+    ):
+    grid_size = file['ICs_parameters'].attrs['Grid Resolution']
+    box_size  = file['Header'].attrs['BoxSize'][0]
+    enhancment_factor = generator.scale_factor
+    grid_size = grid_size * enhancment_factor
+    cell_size = box_size / grid_size
     
-    dataset = TensorDataset(patches)
+    dm_data = file['DMParticles']
+    del dm_data['Coordinates']
+    pos_dset = dm_data.create_dataset(
+        'Coordinates', shape=(0, 3), maxshape=(grid_size**3, 3), dtype='f8'
+    )
+    
+    del dm_data['ParticleIDs']
+    ids_dset = dm_data.create_dataset(
+        'ParticleIDs', shape=(0,), maxshape=(grid_size**3,), dtype='u8'
+    )
+    
+    if include_velocities:
+        del dm_data['Velocities']
+        vel_dset = dm_data.create_dataset(
+            'Velocities', shape=(0, 3), maxshape=(grid_size**3, 3), dtype='f4'
+        )
+    
+    batch_size = 1
+    patches = torch.from_numpy(patches).float()
+    patch_inds = torch.from_numpy(patch_inds).float()
+    
+    dataset = TensorDataset(patches, patch_inds)
     data_loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=False, pin_memory=True
     )
-    del patches
     
-    cosmic_scale_factor = cosmic_scale_factor.repeat(batch_size, 1).to(device)
+    scale_factor = scale_factor.repeat(batch_size, 1).to(device)
     z = generator.tile_latent_variable(z, batch_size, device)
     
-    sr_patches = []
+    sr_patch_size = generator.output_size - 2 * generator.nn_distance
+    r = np.arange(0, sr_patch_size, dtype=np.uint64)
+    relative_grid_inds = np.stack(np.meshgrid(r, r, r, indexing='ij'))
+    
+    hr_position_std = scale_params.get('HR_Coordinates_std', 1)
+    hr_velocity_std = scale_params.get('HR_Velocities_std', 1)
+    
     with torch.no_grad():
-        for (i, (batch,)) in enumerate(data_loader):
+        for (i, (batch, inds)) in enumerate(data_loader):
             print(f"Processing batch {i+1} of {len(data_loader)}")
-            batch = batch.to(device, non_blocking=True)
-            sr_batch = generator(batch, z, cosmic_scale_factor)
-            sr_batch = sr_batch.detach().to('cpu', non_blocking=True)
+            batch = batch.to(device)
+            sr_batch = generator(batch, z, scale_factor)
+            sr_batch = sr_batch.detach().to('cpu')
             if generator.nn_distance:
                 sr_batch = crop(sr_batch, 1)
-            sr_patches.extend([patch.numpy() for patch in sr_batch.unbind(0)])
-    
-    del dataset
-    del data_loader
-    return sr_patches
-
-
-
-def write_enhanced_data(
-        file, sr_patches, sr_grid_size, upscale_velocities, scale_params
-    ):
-    dm_data   = file['DMParticles']
-    box_size  = file['Header'].attrs['BoxSize'][0]
-    
-    output_size = sr_patches[0].shape[-1]
-    patches_per_dim = sr_grid_size // output_size
-    volume_covered = sr_grid_size == patches_per_dim * output_size
-    assert volume_covered, 'Volume not covered by SR patches'
-    sr_field = stitch_fields(sr_patches, patches_per_dim)
-    
-    hr_position_std = scale_params.get('HR_disp_fields_std', 1)
-    
-    if upscale_velocities:
-        hr_velocity_std = scale_params.get('HR_vel_fields_std', 1)
-        sr_displacement = sr_field[:3, ...] * hr_position_std
-        sr_velocity     = sr_field[3:, ...] * hr_velocity_std
-        sr_velocities = sr_velocity.reshape(3, -1)
-        sr_velocities = sr_velocities.transpose()
-    else:
-        sr_displacement = sr_field * hr_position_std
-    del sr_field
-        
-    sr_positions = get_positions(sr_displacement, box_size, sr_grid_size)
-    sr_positions = sr_positions.transpose()
-    sr_ids = np.arange(sr_grid_size**3)
-
-    del dm_data['Coordinates']
-    dm_data.create_dataset('Coordinates', data=sr_positions)
-    del dm_data['ParticleIDs']
-    dm_data.create_dataset('ParticleIDs', data=sr_ids)
-    
-    if upscale_velocities:
-        del dm_data['Velocities']
-        dm_data.create_dataset('Velocities', data=sr_velocities)
+            
+            sr_displacements = sr_batch[:, :3, ...].numpy() * hr_position_std
+            inds = inds.numpy().astype(np.uint64) * enhancment_factor
+            
+            grid_indices = relative_grid_inds + inds.T[..., None, None]
+            ids = particle_ids(grid_indices.reshape(3, -1), grid_size)
+            # Write to disk
+            ids_dset.resize(ids_dset.shape[0] + ids.shape[0], axis=0)
+            ids_dset[-ids.shape[0]:] = ids
+            
+            positions = (grid_indices * cell_size + sr_displacements)
+            positions = positions.reshape(3, -1).T
+            positions %= box_size
+            # Write to disk
+            pos_dset.resize(pos_dset.shape[0] + positions.shape[0], axis=0)
+            pos_dset[-positions.shape[0]:] = positions
+            
+            if include_velocities:
+                sr_velocities = sr_batch[:, 3:, ...].numpy() * hr_velocity_std
+                velocities = sr_velocities.reshape(3, -1).T
+                # Write to disk
+                vel_dset.resize(vel_dset.shape[0] + velocities.shape[0], axis=0)
+                vel_dset[-velocities.shape[0]:] = velocities
         
     
 
