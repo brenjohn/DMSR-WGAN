@@ -6,6 +6,7 @@ Created on Wed May  7 15:25:35 2025
 @author: brennan
 """
 
+import pickle
 from collections import defaultdict
 
 
@@ -57,3 +58,16 @@ def build_merger_tree(halo_catalogues):
 def link_halos(ancestor, descendant):
     descendant.set_ancestor(ancestor.halo_id)
     ancestor.set_descendant(descendant.halo_id)
+    
+    
+def save_halo_catalogues(halo_catalogues, filename):
+    """Saves a nested list of Halo objects to a file."""
+    with open(filename, 'wb') as f:
+        pickle.dump(halo_catalogues, f)
+
+    
+def load_halo_catalogues(filename):
+    """Loads a nested list of Halo objects from a pickled file."""
+    with open(filename, 'rb') as f:
+        halo_catalogues = pickle.load(f)
+    return halo_catalogues

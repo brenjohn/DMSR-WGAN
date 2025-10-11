@@ -20,6 +20,7 @@ class Halo:
         
         self.positions = None
         self.mass = None
+        self.redshift = None
         
         self.descendant = None
         self.ancestors = None
@@ -31,6 +32,10 @@ class Halo:
     
     def set_mass(self, particle_mass):
         self.mass = particle_mass * self.num_particles
+        
+        
+    def set_redshift(self, z):
+        self.redshift = z
     
     
     def set_descendant(self, descendant_id):

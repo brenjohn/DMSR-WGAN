@@ -10,14 +10,14 @@ snapshot using a dmsr generator model.
 """
 
 import os
+import time
 import torch
 import shutil
 import h5py as h5
 import numpy as np
 
-from .fields import get_positions, particle_ids
+from .fields import particle_ids, cut_field
 from .fields import get_displacement_field, get_velocity_field
-from .fields import cut_field, stitch_fields
 from dmsr.data_tools import crop
 
 from torch.utils.data import DataLoader, TensorDataset
@@ -185,17 +185,22 @@ def upscale_patches(
     with torch.no_grad():
         for (i, (batch, inds)) in enumerate(data_loader):
             print(f"Processing batch {i+1} of {len(data_loader)}")
+            initial_time = time.time()
+            
             batch = batch.to(device)
             sr_batch = generator(batch, z, scale_factor)
             sr_batch = sr_batch.detach().to('cpu')
             if generator.nn_distance:
                 sr_batch = crop(sr_batch, 1)
+                
+            upscaling_time = time.time()
             
             sr_displacements = sr_batch[:, :3, ...].numpy() * hr_position_std
             inds = inds.numpy().astype(np.uint64) * enhancment_factor
-            
             grid_indices = relative_grid_inds + inds.T[..., None, None]
             ids = particle_ids(grid_indices.reshape(3, -1), grid_size)
+            
+            conversion_time = time.time()
             # Write to disk
             ids_dset.resize(ids_dset.shape[0] + ids.shape[0], axis=0)
             ids_dset[-ids.shape[0]:] = ids
@@ -213,6 +218,10 @@ def upscale_patches(
                 # Write to disk
                 vel_dset.resize(vel_dset.shape[0] + velocities.shape[0], axis=0)
                 vel_dset[-velocities.shape[0]:] = velocities
+            disk_write_time = time.time()
+            print(f'upscaling time: {upscaling_time - initial_time}')
+            print(f'conversion time: {conversion_time - upscaling_time}')
+            print(f'disk write time: {disk_write_time - conversion_time}')
         
     
 
