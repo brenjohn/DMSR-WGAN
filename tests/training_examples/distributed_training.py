@@ -149,7 +149,7 @@ def main(rank, world_size):
     #=========================================================================#
     #                          DMSR WGAN Setup
     #=========================================================================#
-    gan = DMSRWGAN(generator, critic, device)
+    gan = DMSRWGAN(generator, critic, device, distributed = True)
     
     gan.set_dataset(
         dataloader, 

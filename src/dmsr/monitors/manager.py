@@ -10,6 +10,8 @@ objects during training.
 """
 
 import time
+import torch
+import torch.distributed as dist
 
 
 class MonitorManager():
@@ -71,6 +73,11 @@ class MonitorManager():
     def end_of_batch(self, epoch, batch, batch_counter, losses):
         """Calls the `post_batch_processing` method of each monitor.
         """
+        if dist.is_initialized():
+            losses = self.reduce_losses(losses)
+            if not (dist.get_rank() == 0):
+                return
+        
         monitor_report = ''
         
         for monitor in self.monitors.values():
@@ -97,3 +104,26 @@ class MonitorManager():
             
             print(report, flush=True)
             self.batch_start_time = time.time()
+            
+    
+    def reduce_losses(self, losses):
+        """Collects loss values on main process and returns a dict of averages.
+        """
+        reduced_losses = {}
+        
+        for loss_name, loss in losses.items():
+            average_loss = torch.tensor(
+                [loss], dtype=torch.float32, device=self.device
+            )
+            
+            dist.reduce(
+                tensor=average_loss,
+                dst=0,
+                op=dist.ReduceOp.SUM
+            )
+            
+            if dist.get_rank() == 0:
+                average_loss /= dist.get_world_size()
+                reduced_losses[loss_name] = average_loss.item()
+                
+        return reduced_losses if dist.get_rank() == 0 else losses
