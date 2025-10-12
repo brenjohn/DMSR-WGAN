@@ -127,6 +127,7 @@ class DMSRGenerator(nn.Module):
         output_size = self.output_size + 2 * self.nn_distance
         if output_size % self.scale_factor != 0:
             print('WARNING: inner region of generator input not an integer')
+            print('output, scale =', output_size, self.scale_factor)
         self.inner_region = output_size // self.scale_factor
         
         if (self.grid_size - self.inner_region) % 2 != 0:

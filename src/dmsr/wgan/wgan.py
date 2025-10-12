@@ -73,7 +73,7 @@ class DMSRWGAN:
         self.lr_crop_size = (lr_size - hr_size // scale) // 2
         
         # Calculate the final crop size for the upscaled lr data.
-        self.hr_crop_size = 2 * (lr_size - 2 * self.lr_crop_size) - hr_size
+        self.hr_crop_size = scale * (lr_size - 2 * self.lr_crop_size) - hr_size
         self.hr_crop_size //=2
         
         
