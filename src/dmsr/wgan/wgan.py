@@ -47,8 +47,8 @@ class DMSRWGAN:
         self.mse_loss = MSELoss()
         
         if distributed:
-            self.generator = DDP(generator, device_ids=[device])
-            self.critic = DDP(critic, device_ids=[device])
+            self.generator = DDP(generator, device_ids=[device.index])
+            self.critic = DDP(critic, device_ids=[device.index])
         else:
             self.generator = SerialContainer(generator)
             self.critic = SerialContainer(critic)

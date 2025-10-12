@@ -44,7 +44,10 @@ def main():
     #================================ DDP SETUP ==============================#
     setup_ddp()
     rank = int(os.environ["RANK"])
-    device = torch.device(int(os.environ["LOCAL_RANK"]))
+    local_rank = int(os.environ["LOCAL_RANK"])
+    
+    torch.cuda.set_device(local_rank)
+    device = torch.device(local_rank)
     is_main_process = (rank == 0)
 
     # --- Configuration ---
