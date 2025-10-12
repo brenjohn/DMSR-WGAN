@@ -42,6 +42,7 @@ class DMSRWGAN:
         self.gradient_penalty_rate = gradient_penalty_rate
         self.distributed = distributed
         self.batch_counter = 0
+        self.epoch_counter = 0
         self.scale_factor = generator.scale_factor
         self.mse_loss = MSELoss()
         
@@ -110,7 +111,7 @@ class DMSRWGAN:
         
         for epoch in range(num_epochs):
             if self.distributed:
-                self.data.sampler.set_epoch(epoch)
+                self.data.sampler.set_epoch(self.epoch_counter)
                 dist.barrier()
             
             for batch_num, batch in enumerate(self.data):
@@ -124,6 +125,7 @@ class DMSRWGAN:
                     
             # End of epoch processing.
             self.monitor.end_of_epoch(epoch)
+            self.epoch_counter += 1
             
         if self.distributed:
             dist.barrier()
@@ -302,8 +304,9 @@ class DMSRWGAN:
         
         # Save other attributes
         attributes = {
-            'batch_counter': self.batch_counter,
-            'gradient_penalty_rate': self.gradient_penalty_rate
+            'batch_counter' : self.batch_counter,
+            'epoch_counter' : self.epoch_counter,
+            'gradient_penalty_rate' : self.gradient_penalty_rate
         }
         save(attributes, model_dir / 'attributes.pth')
         
