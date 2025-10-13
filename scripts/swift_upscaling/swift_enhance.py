@@ -115,5 +115,6 @@ if __name__ == '__main__':
         args.data_dir, 
         args.snapshot_pattern, 
         args.output_suffix,
-        args.output_dir
+        args.output_dir,
+        args.seed
     )

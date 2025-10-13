@@ -149,18 +149,21 @@ def upscale_patches(
     dm_data = file['DMParticles']
     del dm_data['Coordinates']
     pos_dset = dm_data.create_dataset(
-        'Coordinates', shape=(0, 3), maxshape=(grid_size**3, 3), dtype='f8'
+        'Coordinates', shape=(0, 3), maxshape=(grid_size**3, 3), 
+        dtype='f8', compression='gzip', compression_opts=4
     )
     
     del dm_data['ParticleIDs']
     ids_dset = dm_data.create_dataset(
-        'ParticleIDs', shape=(0,), maxshape=(grid_size**3,), dtype='u8'
+        'ParticleIDs', shape=(0,), maxshape=(grid_size**3,), 
+        dtype='u8', compression='gzip', compression_opts=4
     )
     
     if include_velocities:
         del dm_data['Velocities']
         vel_dset = dm_data.create_dataset(
-            'Velocities', shape=(0, 3), maxshape=(grid_size**3, 3), dtype='f4'
+            'Velocities', shape=(0, 3), maxshape=(grid_size**3, 3), 
+            dtype='f4', compression='gzip', compression_opts=4
         )
     
     batch_size = 1
@@ -231,7 +234,12 @@ def zero_particle_velocities(dm_data, scale_factor):
     new_velocities = np.zeros_like(dm_data['Velocities'])
     new_velocities = np.tile(new_velocities, (scale_factor**3, 1))
     del dm_data['Velocities']
-    dm_data.create_dataset('Velocities', data=new_velocities)
+    dm_data.create_dataset(
+        'Velocities', 
+        data=new_velocities, 
+        compression='gzip', 
+        compression_opts=4
+    )
 
 
 def update_particle_mass(dm_data, scale_factor):
@@ -241,7 +249,12 @@ def update_particle_mass(dm_data, scale_factor):
     new_mass = old_mass / scale_factor**3
     new_mass = np.tile(new_mass, scale_factor**3)
     del dm_data['Masses']
-    dm_data.create_dataset('Masses', data=new_mass)
+    dm_data.create_dataset(
+        'Masses', 
+        data=new_mass,
+        compression='gzip',
+        compression_opts=4
+    )
     
     
 def update_potentials(dm_data, scale_factor):
@@ -250,7 +263,12 @@ def update_potentials(dm_data, scale_factor):
     new_potentials = np.zeros_like(dm_data['Potentials'])
     new_potentials = np.tile(new_potentials, scale_factor**3)
     del dm_data['Potentials']
-    dm_data.create_dataset('Potentials', data=new_potentials)
+    dm_data.create_dataset(
+        'Potentials', 
+        data=new_potentials,
+        compression='gzip',
+        compression_opts=4
+    )
 
 
 def update_softenings(dm_data, scale_factor):
@@ -260,4 +278,9 @@ def update_softenings(dm_data, scale_factor):
     new_soft = old_soft / scale_factor
     new_soft = np.tile(new_soft, scale_factor**3)
     del dm_data['Softenings']
-    dm_data.create_dataset('Softenings', data=new_soft)
+    dm_data.create_dataset(
+        'Softenings', 
+        data=new_soft,
+        compression='gzip',
+        compression_opts=4
+    )
