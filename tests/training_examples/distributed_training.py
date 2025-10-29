@@ -46,7 +46,7 @@ def main(rank, world_size):
     # --- Configuration ---
     # TODO: These could be moved to argparse for better control
     num_epochs = 2
-    batch_size = 8
+    batch_size = 4
     output_dir = Path('./test_run/')
     
     # Only the main process should create directories
@@ -98,7 +98,7 @@ def main(rank, world_size):
     if is_main_process:
         generate_mock_dataset(
             data_dir           = data_directory, 
-            num_patches        = 16,
+            num_patches        = batch_size * 2,
             lr_grid_size       = lr_grid_size,
             hr_grid_size       = hr_grid_size,
             lr_padding         = generator.padding,
@@ -108,7 +108,6 @@ def main(rank, world_size):
             include_spectra    = False
         )
     dist.barrier()
-    batch_size = 8
     
     metadata = np.load(
         data_directory / 'metadata.npy', allow_pickle=True

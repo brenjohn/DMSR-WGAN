@@ -23,6 +23,87 @@ from dmsr.data_tools import crop
 from torch.utils.data import DataLoader, TensorDataset
 
 
+class ChunkWriter:
+    """The ChunkWriter class is used to collect enhanced patches of a SWIFT
+    snapshot and save them in a hdf5 file. The patches are written to disk in 
+    chunks to reduce IO overhead.
+    """
+    
+    def __init__(self, file, include_velocities, enhancment_factor):
+        self.file = file
+        self.include_velocities = include_velocities
+        self.enhancment_factor = enhancment_factor
+        
+        self.grid_size = file['ICs_parameters'].attrs['Grid Resolution']
+        self.grid_size *= enhancment_factor
+        self.box_size  = file['Header'].attrs['BoxSize'][0]
+        self.cell_size = self.box_size / self.grid_size
+        
+        self.current_idx = 0
+        self.batches_per_chunk = 4
+        self.ids_buffer = []
+        self.pos_buffer = []
+        self.vel_buffer = []
+        self.create_datasets()
+        
+        
+    def create_datasets(self):
+        chunk_dim = self.batches_per_chunk * 64**3
+        pos_chunks = (chunk_dim, 3)
+        ids_chunks = (chunk_dim,)
+        vel_chunks = (chunk_dim, 3)
+        
+        dm_data = self.file['DMParticles']
+        del dm_data['Coordinates']
+        self.pos_dset = dm_data.create_dataset(
+            'Coordinates', shape=(self.grid_size**3, 3), 
+            dtype='f8', compression='gzip', compression_opts=4,
+            chunks=pos_chunks
+        )
+        
+        del dm_data['ParticleIDs']
+        self.ids_dset = dm_data.create_dataset(
+            'ParticleIDs', shape=(self.grid_size**3,), 
+            dtype='u8', compression='gzip', compression_opts=4,
+            chunks=ids_chunks
+        )
+        
+        if self.include_velocities:
+            del dm_data['Velocities']
+            self.vel_dset = dm_data.create_dataset(
+                'Velocities', shape=(self.grid_size**3, 3), 
+                dtype='f4', compression='gzip', compression_opts=4,
+                chunks=vel_chunks
+            )
+            
+    def write(self, ids, pos, vel, batch, is_last_batch):
+        
+        self.ids_buffer.append(ids)
+        self.pos_buffer.append(pos)
+        self.vel_buffer.append(vel)
+        
+        if not ((batch + 1) % self.batches_per_chunk == 0 or is_last_batch):
+            return
+        
+        ids_chunk = np.concatenate(self.ids_buffer)
+        pos_chunk = np.concatenate(self.pos_buffer)
+        
+        num_new_rows = ids_chunk.shape[0]
+        current_idx = self.current_idx
+        
+        self.ids_dset[current_idx : current_idx + num_new_rows] = ids_chunk
+        self.pos_dset[current_idx : current_idx + num_new_rows] = pos_chunk
+        
+        if self.include_velocities:
+            vel_chunk = np.concatenate(self.vel_buffer)
+            self.vel_dset[current_idx : current_idx + num_new_rows] = vel_chunk
+        
+        self.ids_buffer.clear()
+        self.pos_buffer.clear()
+        self.vel_buffer.clear()
+        self.current_idx += num_new_rows
+
+
 def enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device):
     """
     Use the given generator to enhance the `lr_snapshot` and save the result in
@@ -128,7 +209,6 @@ def get_field_data(file, scale_params, include_velocities, scale_factor):
     return fields, grid_size, box_size
 
 
-
 def upscale_patches(
         file,
         patches, 
@@ -140,31 +220,12 @@ def upscale_patches(
         include_velocities,
         device
     ):
-    grid_size = file['ICs_parameters'].attrs['Grid Resolution']
-    box_size  = file['Header'].attrs['BoxSize'][0]
+    
     enhancment_factor = generator.scale_factor
-    grid_size = grid_size * enhancment_factor
-    cell_size = box_size / grid_size
-    
-    dm_data = file['DMParticles']
-    del dm_data['Coordinates']
-    pos_dset = dm_data.create_dataset(
-        'Coordinates', shape=(0, 3), maxshape=(grid_size**3, 3), 
-        dtype='f8', compression='gzip', compression_opts=4
-    )
-    
-    del dm_data['ParticleIDs']
-    ids_dset = dm_data.create_dataset(
-        'ParticleIDs', shape=(0,), maxshape=(grid_size**3,), 
-        dtype='u8', compression='gzip', compression_opts=4
-    )
-    
-    if include_velocities:
-        del dm_data['Velocities']
-        vel_dset = dm_data.create_dataset(
-            'Velocities', shape=(0, 3), maxshape=(grid_size**3, 3), 
-            dtype='f4', compression='gzip', compression_opts=4
-        )
+    writer = ChunkWriter(file, include_velocities, enhancment_factor)
+    grid_size = writer.grid_size
+    box_size  = writer.box_size
+    cell_size = writer.cell_size
     
     batch_size = 1
     patches = torch.from_numpy(patches).float()
@@ -185,6 +246,8 @@ def upscale_patches(
     hr_position_std = scale_params.get('HR_Coordinates_std', 1)
     hr_velocity_std = scale_params.get('HR_Velocities_std', 1)
     
+    print("Starting batch processing...")
+    
     with torch.no_grad():
         for (i, (batch, inds)) in enumerate(data_loader):
             print(f"Processing batch {i+1} of {len(data_loader)}")
@@ -204,23 +267,19 @@ def upscale_patches(
             ids = particle_ids(grid_indices.reshape(3, -1), grid_size)
             
             conversion_time = time.time()
-            # Write to disk
-            ids_dset.resize(ids_dset.shape[0] + ids.shape[0], axis=0)
-            ids_dset[-ids.shape[0]:] = ids
             
             positions = (grid_indices * cell_size + sr_displacements)
             positions = positions.reshape(3, -1).T
             positions %= box_size
-            # Write to disk
-            pos_dset.resize(pos_dset.shape[0] + positions.shape[0], axis=0)
-            pos_dset[-positions.shape[0]:] = positions
             
+            velocities = None
             if include_velocities:
                 sr_velocities = sr_batch[:, 3:, ...].numpy() * hr_velocity_std
                 velocities = sr_velocities.reshape(3, -1).T
-                # Write to disk
-                vel_dset.resize(vel_dset.shape[0] + velocities.shape[0], axis=0)
-                vel_dset[-velocities.shape[0]:] = velocities
+                
+            is_last_batch = (i + 1) == len(data_loader)
+            writer.write(ids, positions, velocities, i, is_last_batch)
+            
             disk_write_time = time.time()
             print(f'upscaling time: {upscaling_time - initial_time}')
             print(f'conversion time: {conversion_time - upscaling_time}')
