@@ -132,9 +132,10 @@ class SpectrumMonitor(Monitor):
     def get_power_spectrum(self, field):
         box_size = self.box_size
         grid_size = self.grid_size
+        cell_size = box_size / grid_size
         mass = self.particle_mass
         density = cic_density_field(field, box_size, grid_size)[0, 0, ...]
-        density *= mass
+        density *= mass / (cell_size**3)
         sr_ks, sr_spectrum, _ = power_spectrum(density, box_size, grid_size)
         return sr_ks, sr_spectrum
     
