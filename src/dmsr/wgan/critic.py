@@ -16,10 +16,8 @@ from pathlib import Path
 
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
-from ..field_analysis import cic_density_field
-from ..field_analysis import nn_distance_field
-from ..data_tools import pixel_unshuffle
-from ..data_tools import crop
+from ..field_operations import cic_density_field, nn_distance_field
+from ..data_tools import pixel_unshuffle, crop
 
 
 class DMSRCritic(nn.Module):

@@ -23,7 +23,7 @@ class SamplesMonitor(Monitor):
             self,
             gan,
             data_directory,
-            patch_number,
+            patch_number  = 1,
             velocities    = False,
             scale_factors = False,
             summary_stats = None,

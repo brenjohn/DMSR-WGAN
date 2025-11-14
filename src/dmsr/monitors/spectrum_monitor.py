@@ -13,7 +13,7 @@ from .monitor import Monitor
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
-from ..field_analysis import cic_density_field, power_spectrum
+from ..field_operations import cic_density_field, power_spectrum
 
 
 class SpectrumMonitor(Monitor):
