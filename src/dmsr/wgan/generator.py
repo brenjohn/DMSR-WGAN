@@ -167,13 +167,26 @@ class DMSRGenerator(nn.Module):
     
     
     def tile_latent_variable(self, latent_variable, size, device):
+        """Applies periodic boundary conditions to the latent variable 
+        components and then tiles (repeats) them along the batch dimension.
         """
-        """
+        [self.wrap_border(noise[0], 4) for noise in latent_variable]
+        [self.wrap_border(noise[1], 6) for noise in latent_variable]
         return [(
             noise[0].tile(size, 1, 1, 1, 1).to(device), 
             noise[1].tile(size, 1, 1, 1, 1).to(device)
             ) for noise in latent_variable
         ]
+    
+    
+    def wrap_border(self, data, size):
+        """Copies data from the far side of the array to the near side for the 
+        last three spatial dimensions, effectively imposing periodic bounary 
+        conditions.
+        """
+        data[:, :, 0:size, :, :] = data[:, :, -size:, :, :]
+        data[:, :, :, 0:size, :] = data[:, :, :, -size:, :]
+        data[:, :, :, :, 0:size] = data[:, :, :, :, -size:]
     
     
     #=========================================================================#
