@@ -10,6 +10,8 @@ objects during training.
 """
 
 import time
+import torch
+import torch.distributed as dist
 
 
 class MonitorManager():
@@ -34,6 +36,7 @@ class MonitorManager():
     def __init__(self, report_rate, device):
         self.device = device
         self.report_rate = report_rate
+        self.monitors = {}
         
     
     def set_monitors(self, monitors):
@@ -53,7 +56,7 @@ class MonitorManager():
         """Calls the `post_epoch_processing` method of each monitor.
         """
         epoch_time = time.time() - self.epoch_start_time
-        print(f"[Epoch {epoch} took: {epoch_time:.4f} sec]")
+        print(f"[{self.device}][Epoch {epoch} took: {epoch_time:.4f} sec]")
         post_processing_start_time = time.time()
         
         for monitor in self.monitors.values():
@@ -62,15 +65,19 @@ class MonitorManager():
         self.epoch_start_time = time.time()
         self.batch_start_time = time.time()
         post_processing_time = time.time() - post_processing_start_time
-        print(
-            f"[Epoch post-processing took: {post_processing_time:.4f} sec]",
-            flush=True
-        )
+        message = f'[{self.device}]'
+        message += f'[Epoch post-processing: {post_processing_time:.4f} sec]'
+        print(message, flush=True)
     
         
     def end_of_batch(self, epoch, batch, batch_counter, losses):
         """Calls the `post_batch_processing` method of each monitor.
         """
+        if dist.is_initialized():
+            losses = self.reduce_losses(losses)
+            if not (dist.get_rank() == 0):
+                return
+        
         monitor_report = ''
         
         for monitor in self.monitors.values():
@@ -89,10 +96,34 @@ class MonitorManager():
             time_prev = self.batch_start_time
             average_batch_time = (time_curr - time_prev) / self.report_rate
             
-            report  = f"[Epoch {epoch:04}/{self.num_epochs}]"
+            report  = f"[{self.device}]"
+            report += f"[Epoch {epoch:04}/{self.num_epochs}]"
             report += f"[Batch {batch:03}/{self.num_batches}]"
             report += f"[time per batch: {average_batch_time*1000:.4f} ms]"
             report += monitor_report
             
-            print(report)
+            print(report, flush=True)
             self.batch_start_time = time.time()
+            
+    
+    def reduce_losses(self, losses):
+        """Collects loss values on main process and returns a dict of averages.
+        """
+        reduced_losses = {}
+        
+        for loss_name, loss in losses.items():
+            average_loss = torch.tensor(
+                [loss], dtype=torch.float32, device=self.device
+            )
+            
+            dist.reduce(
+                tensor=average_loss,
+                dst=0,
+                op=dist.ReduceOp.SUM
+            )
+            
+            if dist.get_rank() == 0:
+                average_loss /= dist.get_world_size()
+                reduced_losses[loss_name] = average_loss.item()
+                
+        return reduced_losses if dist.get_rank() == 0 else losses

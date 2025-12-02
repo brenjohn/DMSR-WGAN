@@ -22,6 +22,7 @@ class SpectraDataset(Dataset):
             include_velocities    = False,
             include_scale_factors = False,
             summary_stats     = None,
+            **kwargs
         ):
         self.data_dir      = data_dir
         self.velocities    = include_velocities

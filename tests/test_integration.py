@@ -13,6 +13,7 @@ import unittest
 import subprocess
 
 from pathlib import Path
+from dmsr.data_tools import generate_mock_dataset
 
 
 class TestTrainingIntegrationTest(unittest.TestCase):
@@ -21,6 +22,28 @@ class TestTrainingIntegrationTest(unittest.TestCase):
     def setUpClass(cls):
         # Use `SHOW_TEST_OUTPUT=1 python -m unittest` to show test std output.
         cls.show_output = os.getenv('SHOW_TEST_OUTPUT', '0') == '1'
+        
+        # Default arguments for mock data generation.
+        cls.mock_train_data_args = {
+            'num_patches'        : 16,
+            'lr_grid_size'       : 20,
+            'hr_grid_size'       : 32,
+            'lr_padding'         : 2,
+            'hr_padding'         : 0,
+            'include_velocities' : True, 
+            'include_scales'     : False,
+            'include_spectra'    : False
+        }
+        cls.mock_valid_data_args = {
+            'num_patches'        : 4,
+            'lr_grid_size'       : 20,
+            'hr_grid_size'       : 32,
+            'lr_padding'         : 2,
+            'hr_padding'         : 0,
+            'include_velocities' : True, 
+            'include_scales'     : False,
+            'include_spectra'    : True
+        }
     
     
     @classmethod
@@ -37,6 +60,44 @@ class TestTrainingIntegrationTest(unittest.TestCase):
     
     def tearDown(self):
         self.temp_dir.cleanup()
+    
+    
+    def _run(self, parameter_file, output_dir, distributed=False):
+        command = [
+            'python', 
+            '../../scripts/dmsr_train.py', 
+            f'--parameter_file={parameter_file}'
+        ]
+        if distributed:
+            command = [
+                'torchrun', 
+                '--nproc_per_node', '1',
+                '--rdzv_backend', 'c10d',
+                '--rdzv_endpoint', 'localhost:29500'
+            ] + command[1:]
+        
+        subprocess_env = os.environ.copy()
+        subprocess_env['MKL_THREADING_LAYER'] = 'GNU'
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=self.test_output_dir,
+            env=subprocess_env
+        )
+        
+        if self.show_output:
+            print(f"\n--- {output_dir} test STDOUT ---\n", result.stdout)
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        
+        output_dir = self.test_output_dir / output_dir
+        checkpoints_path = output_dir / 'checkpoints'
+        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
+        
+        samples_path = output_dir / 'samples_monitor_1'
+        self.assertTrue(samples_path.exists(), "No samples generated")
         
         
     #=========================================================================#
@@ -44,105 +105,86 @@ class TestTrainingIntegrationTest(unittest.TestCase):
     #=========================================================================#
     
     def test_velocity_critic(self):
-        result = subprocess.run(
-            ['python', '../training_examples/training_velocity_critic.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'train_data', 
+            **self.mock_train_data_args
+        )
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'valid_data', 
+            **self.mock_valid_data_args
         )
         
-        if self.show_output:
-            print("\n--- Velocity test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        
-        checkpoints_path = self.test_output_dir / 'velocity_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
-        
-        samples_path = self.test_output_dir / 'velocity_run/samples'
-        self.assertTrue(samples_path.exists(), "No samples generated")
+        parameter_file = '../training_examples/velocity_critic.json'
+        output_dir = 'velocity_run'
+        self._run(parameter_file, output_dir)
         
     
+    
     def test_original_critic(self):
-        result = subprocess.run(
-            ['python', '../training_examples/training_original_critic.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'train_data', 
+            **self.mock_train_data_args | {'include_velocities' : False}
+        )
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'valid_data', 
+            **self.mock_valid_data_args | {'include_velocities' : False}
         )
         
-        if self.show_output:
-            print("\n--- Original test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        parameter_file = '../training_examples/original_critic.json'
+        output_dir = 'original_run'
+        self._run(parameter_file, output_dir)
         
-        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
-        
-        samples_path = self.test_output_dir / 'test_run/samples'
-        self.assertTrue(samples_path.exists(), "No samples generated")
-        
+       
         
     def test_style(self):
-        result = subprocess.run(
-            ['python', '../training_examples/style_training.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'train_data', 
+            **self.mock_train_data_args | {'include_scales' : True}
+        )
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'valid_data', 
+            **self.mock_valid_data_args | {'include_scales' : True}
         )
         
-        if self.show_output:
-            print("\n--- style test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        parameter_file = '../training_examples/style_critic.json'
+        output_dir = 'style_run'
+        self._run(parameter_file, output_dir)
         
-        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
-        
-        samples_path = self.test_output_dir / 'test_run/samples'
-        self.assertTrue(samples_path.exists(), "No samples generated")
-        
-        
-    def test_datastream(self):
-        result = subprocess.run(
-            ['python', '../training_examples/style_datastream.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
-        )
-        
-        if self.show_output:
-            print("\n--- Datastream test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        
-        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
-        
-        samples_path = self.test_output_dir / 'test_run/samples_1'
-        self.assertTrue(samples_path.exists(), "No samples generated")
+        parameter_file = '../training_examples/style_critic_restart.json'
+        output_dir = 'style_run_restart'
+        self._run(parameter_file, output_dir)
+    
     
     
     def test_nn_distance(self):
-        result = subprocess.run(
-            ['python', '../training_examples/training_nn_distance_critic.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=self.test_output_dir
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'train_data', 
+            **self.mock_train_data_args | {
+                'include_scales' : True, 'hr_padding' : 1, 'hr_grid_size' : 34
+            }
+        )
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'valid_data', 
+            **self.mock_valid_data_args | {
+                'include_scales' : True, 'hr_padding' : 1, 'hr_grid_size' : 34
+            }
         )
         
-        if self.show_output:
-            print("\n--- NN distance test STDOUT ---\n", result.stdout)
-
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        parameter_file = '../training_examples/nn_distance_critic.json'
+        output_dir = 'nn_distance_run'
+        self._run(parameter_file, output_dir)
         
-        checkpoints_path = self.test_output_dir / 'test_run/checkpoints'
-        self.assertTrue(checkpoints_path.exists(), "No checkpoints created")
         
-        samples_path = self.test_output_dir / 'test_run/samples_1'
-        self.assertTrue(samples_path.exists(), "No samples generated")
+    def test_ddp_training(self):
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'train_data', 
+            **self.mock_train_data_args | {'include_scales' : True}
+        )
+        generate_mock_dataset(
+            data_dir = self.test_output_dir / 'valid_data', 
+            **self.mock_valid_data_args | {'include_scales' : True}
+        )
+        
+        parameter_file = '../training_examples/distributed.json'
+        output_dir = 'distributed_run'
+        self._run(parameter_file, output_dir, distributed=True)

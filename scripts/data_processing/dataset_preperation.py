@@ -31,7 +31,8 @@ def create_fields(
         snapshot,
         patch_num_start,
         patches_per_snapshot,
-        patch_size, 
+        patch_size,
+        stride,
         padding
     ):
     """
@@ -48,7 +49,10 @@ def create_fields(
     field_data = get_field_data(particle_data, IDs, box_size, grid_size)
     
     patches = cut_field(
-        field_data[None,...], patch_size, patch_size, pad=padding
+        field_data[None,...], 
+        patch_size, 
+        stride = stride, 
+        pad    = padding
     )
         
     for num, patch in enumerate(patches):
@@ -85,6 +89,7 @@ HR_inner_size = 32
 HR_patch_size = HR_inner_size + 2 * HR_padding
 
 patches_per_snapshot = (64 // 16)**3
+stride = 1
 
 
 #%% Metadata
@@ -125,7 +130,8 @@ with mp.Pool(num_procs) as pool:
             snapshot,
             patches_per_snapshot * num,
             patches_per_snapshot,
-            LR_inner_size, 
+            LR_inner_size,
+            stride * LR_inner_size,
             LR_padding
         ))
         
@@ -145,6 +151,7 @@ with mp.Pool(num_procs) as pool:
             patches_per_snapshot * num,
             patches_per_snapshot,
             HR_inner_size, 
+            stride * HR_inner_size,
             HR_padding
         ))
         
@@ -164,6 +171,7 @@ with mp.Pool(num_procs) as pool:
             patches_per_snapshot * num,
             patches_per_snapshot,
             LR_inner_size, 
+            stride * LR_inner_size,
             LR_padding
         ))
         
@@ -182,7 +190,8 @@ with mp.Pool(num_procs) as pool:
             snapshot,
             patches_per_snapshot * num,
             patches_per_snapshot,
-            HR_inner_size, 
+            HR_inner_size,
+            stride * HR_inner_size,
             HR_padding
         ))
     

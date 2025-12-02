@@ -8,12 +8,19 @@ Created on Wed Sep 25 10:34:12 2024
 This file define the DMSR-WGAN class.
 """
 
+import torch.distributed as dist
+
 from pathlib import Path
+from torch import optim
 from torch import save, load
 from torch.nn import MSELoss
 from torch.nn.functional import interpolate
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from ..data_tools.resize import crop
+from .critic import DMSRCritic
+from .generator import DMSRGenerator
+from .serial_container import SerialContainer
 
 
 class DMSRWGAN:
@@ -23,36 +30,48 @@ class DMSRWGAN:
     Generative Adversarial Neural Networks.
     """
     
-    def __init__(self, generator, critic, device, gradient_penalty_rate=16):
-        self.generator = generator
-        self.critic = critic
+    def __init__(
+            self, 
+            generator, 
+            critic, 
+            device, 
+            gradient_penalty_rate=16,
+            distributed=False
+        ):
         self.device = device
         self.gradient_penalty_rate = gradient_penalty_rate
+        self.distributed = distributed
         self.batch_counter = 0
+        self.epoch_counter = 0
         self.scale_factor = generator.scale_factor
         self.mse_loss = MSELoss()
         
-        self._compute_crop_sizes()
+        if distributed:
+            self.generator = DDP(generator)
+            self.critic = DDP(critic)
+        else:
+            self.generator = SerialContainer(generator)
+            self.critic = SerialContainer(critic)
+        
+        self.compute_crop_sizes()
         
         
-    def _compute_crop_sizes(self):
+    def compute_crop_sizes(self):
         """
-        To condition the critic model on lr data, the lr data needs to be
-        upscaled using linear interpolation. On top of this, the data needs to
-        be cropped before and after the interpolation to remove excess cells in
-        the data. This method computes the crop sizes for these operations
-        using the input sizes of the generator and critic models.
+        Computes the crop sizes for the crop operations that happen immediately
+        before and after the linear upscaling operation for lr data used for
+        conditioning the critic model.
         """
-        lr_size = self.generator.grid_size
-        hr_size = self.critic.input_size
-        hr_size += 2 * self.critic.use_nn_distance_features
-        scale = self.generator.scale_factor
+        lr_size = self.generator.module.grid_size
+        hr_size = self.critic.module.input_size
+        hr_size += 2 * self.critic.module.use_nn_distance_features
+        scale = self.scale_factor
         
         # Calculate the crop size for the lr data.
         self.lr_crop_size = (lr_size - hr_size // scale) // 2
         
-        # Calculate the final crop size for the upscaled lr data.
-        self.hr_crop_size = 2 * (lr_size - 2 * self.lr_crop_size) - hr_size
+        # Calculate the crop size for the linearly upscaled lr data.
+        self.hr_crop_size = scale * (lr_size - 2 * self.lr_crop_size) - hr_size
         self.hr_crop_size //=2
         
         
@@ -67,9 +86,23 @@ class DMSRWGAN:
         self.batch_size = batch_size
         
         
-    def set_optimizer(self, optimizer_c, optimizer_g):
-        self.optimizer_c = optimizer_c
-        self.optimizer_g = optimizer_g
+    def set_optimizers(self, lr_G=1e-6, lr_C=2e-6, b1=0.0, b2=0.99):
+        self.optimizer_g = optim.Adam(
+            self.generator.parameters(), lr=lr_G, betas=(b1, b2)
+        )
+        self.optimizer_c = optim.Adam(
+            self.critic.parameters(), lr=lr_C, betas=(b1, b2)
+        )
+        
+    
+    def set_learning_rates(self, lr_G = None, lr_C = None, **kwargs):
+        if lr_G is not None:
+            for param_group in self.optimizer_g.param_groups:
+                param_group['lr'] = lr_G
+        
+        if lr_C is not None:
+            for param_group in self.optimizer_c.param_groups:
+                param_group['lr'] = lr_C
         
     
     def set_monitor(self, monitor):
@@ -85,7 +118,12 @@ class DMSRWGAN:
         self.monitor.init_monitoring(num_epochs, len(self.data))
         
         for epoch in range(num_epochs):
+            if self.distributed:
+                self.data.sampler.set_epoch(self.epoch_counter)
+                dist.barrier()
+            
             for batch_num, batch in enumerate(self.data):
+                batch = self.move_batch_to_device(*batch)
                 losses = train_step(*batch)
                 
                 # End of batch processing.
@@ -96,6 +134,20 @@ class DMSRWGAN:
                     
             # End of epoch processing.
             self.monitor.end_of_epoch(epoch)
+            self.epoch_counter += 1
+            
+        if self.distributed:
+            dist.barrier()
+            
+    
+    def move_batch_to_device(self, lr_batch, hr_batch, style=None):
+        """Move the given data to the device.
+        """
+        lr_batch = lr_batch.to(self.device)
+        hr_batch = hr_batch.to(self.device)
+        if style is not None:
+            style = style.to(self.device)
+        return lr_batch, hr_batch, style
     
         
     #=========================================================================#
@@ -103,14 +155,9 @@ class DMSRWGAN:
     #=========================================================================#
                 
     def generator_supervised_step(self, lr_batch, hr_batch, style=None):
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Use the generator to create fake data.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        batch_size, device = self.batch_size, self.device
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
         
         # Compute the loss and update the generator parameters.
@@ -124,12 +171,6 @@ class DMSRWGAN:
     
     
     def critic_supervised_step(self, lr_batch, hr_batch, style=None):
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(
@@ -149,12 +190,6 @@ class DMSRWGAN:
     def train_step(self, lr_batch, hr_batch, style=None):
         """Train step for the WGAN.
         """
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(
@@ -176,17 +211,18 @@ class DMSRWGAN:
         """Train step for the critic.
         """
         self.optimizer_c.zero_grad()
+        batch_size, device = self.batch_size, self.device
         
         # Create fake data using the generator.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
-        fake_data = self.critic.prepare_batch(
+        fake_data = self.critic.module.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
         fake_data = tuple(tensor.detach() for tensor in fake_data)
         
         # Prepare real data.
-        real_data = self.critic.prepare_batch(
+        real_data = self.critic.module.prepare_batch(
             hr_batch, us_batch, self.box_size
         )
         real_data = tuple(tensor.detach() for tensor in real_data)
@@ -199,8 +235,8 @@ class DMSRWGAN:
         
         # Add the gradient penalty term to the loss.
         if self.batch_counter % self.gradient_penalty_rate == 0:
-            gradient_penalty = self.critic.gradient_penalty(
-                self.batch_size, *real_data, *fake_data, style, self.device
+            gradient_penalty = self.critic.module.gradient_penalty(
+                batch_size, *real_data, *fake_data, style, device
             )
             losses['gradient_penalty'] = gradient_penalty.item()
         else:
@@ -219,11 +255,12 @@ class DMSRWGAN:
         """Train step for the generator.
         """
         self.optimizer_g.zero_grad()
+        batch_size, device = self.batch_size, self.device
         
         # Use the generator to create fake data.
-        z = self.generator.sample_latent_space(self.batch_size, self.device)
+        z = self.generator.module.sample_latent_space(batch_size, device)
         sr_batch = self.generator(lr_batch, z, style)
-        fake_data = self.critic.prepare_batch(
+        fake_data = self.critic.module.prepare_batch(
             sr_batch, us_batch, self.box_size
         )
         
@@ -249,43 +286,57 @@ class DMSRWGAN:
         Note: data attributes to are note saved. These should be set by the
         set_dataset method.
         """
+        if self.distributed:
+            if not (dist.get_rank() == 0):
+                return
+        
         model_dir.mkdir(parents=True, exist_ok=True)
-
-        save(self.critic, model_dir / 'critic.pth')
-        save(self.generator, model_dir / 'generator.pth')
-
+        
+        # Save the models.
+        self.critic.module.save(model_dir)
+        self.generator.module.save(model_dir)
+        
+        # Save optimizer states
         optimizer_states = {
-            'optimizer_c' : self.optimizer_c.state_dict(),
-            'optimizer_g' : self.optimizer_g.state_dict()
+            'optimizer_c': self.optimizer_c.state_dict(),
+            'optimizer_g': self.optimizer_g.state_dict()
         }
         save(optimizer_states, model_dir / 'optimizers.pth')
         
+        # Save other attributes
         attributes = {
-            'batch_counter'         : self.batch_counter,
+            'batch_counter' : self.batch_counter,
+            'epoch_counter' : self.epoch_counter,
             'gradient_penalty_rate' : self.gradient_penalty_rate
         }
         save(attributes, model_dir / 'attributes.pth')
         
-        
-    def load(self, model_dir):
+    
+    @classmethod
+    def load(cls, model_dir, device, distributed = False):
         """Load a saved model
         """
-        self.critic = load(model_dir / 'critic.pth', weights_only=False)
-        self.generator = load(model_dir / 'generator.pth', weights_only=False)
+        # Load the generator and critic models. Then create a WGAN instance.
+        generator = DMSRGenerator.load(model_dir, device)
+        critic = DMSRCritic.load(model_dir, device)
+        gan = cls(generator, critic, device, distributed=distributed)
         
-        # Here we create new instances of the optimizers to update the weights
-        # of the new models just created.
-        optimizer_type = type(self.optimizer_c)
-        self.optimizer_c = optimizer_type(self.critic.parameters())
-        
-        optimizer_type = type(self.optimizer_g)
-        self.optimizer_g = optimizer_type(self.generator.parameters())
-        
-        # Now load the saved state of the optimizers.
-        optimizers = load(model_dir / 'optimizers.pth', weights_only=False)
-        self.optimizer_c.load_state_dict(optimizers['optimizer_c'])
-        self.optimizer_g.load_state_dict(optimizers['optimizer_g'])
+        # Load optimizers.
+        optimizers = load(
+            model_dir / 'optimizers.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        gan.set_optimizers()
+        gan.optimizer_c.load_state_dict(optimizers['optimizer_c'])
+        gan.optimizer_g.load_state_dict(optimizers['optimizer_g'])
         
         # Load any additional attributes that were saved.
-        attributes = load(model_dir / 'attributes.pth', weights_only=False)
-        vars(self).update(attributes)
+        attributes = load(
+            model_dir / 'attributes.pth', 
+            map_location=device,
+            weights_only=False
+        )
+        vars(gan).update(attributes)
+        
+        return gan

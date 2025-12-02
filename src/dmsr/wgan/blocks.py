@@ -18,8 +18,8 @@ from ..data_tools import crop
 class HBlock(nn.Module):
     """The H-block used in the generator model.
     
-    The H-block take four inputs, (primary, auxiliary, noise A, noise B), and
-    produces two outputs, (primary output, auxiliary output). The H-block has 
+    The H-block take four inputs, (auxiliary, primary, noise A, noise B), and
+    produces two outputs, (auxiliary output, primary output). The H-block has 
     the following structure:
 
                     (auxiliary input)               (primary input)
@@ -51,38 +51,42 @@ class HBlock(nn.Module):
 
     def __init__(self, curr_chan, next_chan, prim_chan, style_size=None):
         super().__init__()
+        self.INTERPOLATION_ARGS = {'scale_factor' : 2, 'mode' : 'trilinear'}
         Conv = DMSRStyleConv if style_size is not None else DMSRConv
 
+        # First convolution operation in auxilary branch.
         self.conv_A = Conv(curr_chan + 1, next_chan, 3, style_size)
         self.relu_A = nn.PReLU()
         
+        # Second convolution operation in auxilary branch.
         self.conv_B = Conv(next_chan + 1, next_chan, 3, style_size)
         self.relu_B = nn.PReLU()
 
-        # Projection to xyz channels
+        # Projection to primary xyz channels
         self.proj_conv = Conv(next_chan, prim_chan, 1, style_size)
         self.proj_relu = nn.PReLU()
 
 
-    def forward(self, x, y, noise, style=None):
+    def forward(self, aux, primary, noise, style=None):
+        # See HBlock docstring for dataflow explaination.
         noise_A, noise_B = noise
         
-        x = torch.cat([x, noise_A], dim=1)
-        x = interpolate(x, scale_factor=2, mode='trilinear')
-        x = self.conv_A(x, style)
-        x = self.relu_A(x)
+        aux = torch.cat([aux, noise_A], dim=1)
+        aux = interpolate(aux, **self.INTERPOLATION_ARGS)
+        aux = self.conv_A(aux, style)
+        aux = self.relu_A(aux)
         
-        x = torch.cat([x, noise_B], dim=1)
-        x = self.conv_B(x, style)
-        x = self.relu_B(x)
+        aux = torch.cat([aux, noise_B], dim=1)
+        aux = self.conv_B(aux, style)
+        aux = self.relu_B(aux)
 
-        y = interpolate(y, scale_factor=2, mode='trilinear')
-        y = crop(y, 2)
-        p = self.proj_conv(x, style)
-        p = self.proj_relu(p)
-        y = y + p
+        primary = interpolate(primary, **self.INTERPOLATION_ARGS)
+        primary = crop(primary, 2)
+        projection = self.proj_conv(aux, style)
+        projection = self.proj_relu(projection)
+        primary = primary + projection
         
-        return x, y
+        return aux, primary
 
 
 
@@ -111,6 +115,7 @@ class ResidualBlock(nn.Module):
     
     def __init__(self, channels_in, channels_out, style_size=None):
         super().__init__()
+        self.INTERPOLATION_ARGS = {'scale_factor' : 0.5, 'mode' : 'trilinear'}
         Conv = DMSRStyleConv if style_size is not None else DMSRConv
         
         self.skip   = Conv(channels_in, channels_out, 1, style_size)
@@ -132,5 +137,5 @@ class ResidualBlock(nn.Module):
         x = self.relu_B(x)
         
         x = x + y
-        x = interpolate(x, scale_factor=0.5, mode='trilinear')
+        x = interpolate(x, **self.INTERPOLATION_ARGS)
         return x

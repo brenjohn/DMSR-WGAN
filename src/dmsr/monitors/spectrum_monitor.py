@@ -13,7 +13,7 @@ from .monitor import Monitor
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
-from ..field_analysis import cic_density_field, power_spectrum
+from ..field_operations import cic_density_field, power_spectrum
 
 
 class SpectrumMonitor(Monitor):
@@ -33,28 +33,27 @@ class SpectrumMonitor(Monitor):
             grid_size,
             particle_mass,
             summary_stats,
-            device,
             checkpoint_dir
         ):
         self.gan = gan
-        self.generator = gan.generator
+        self.generator = gan.generator.module
         self.box_size = box_size
         self.grid_size = grid_size
         self.particle_mass = particle_mass
         self.summary_stats = summary_stats
         self.num_samples = len(dataset)
-        self.device = device
+        self.device = gan.device
         self.checkpoint_dir = checkpoint_dir
         
         # Create a collate function to move data to the device and return a
         # default style variable (None).
         def collate(batch):
             batch = list(zip(*batch))
-            lr_sample  = default_collate(batch[0]).to(device)
-            hr_spectra = default_collate(batch[1]).to(device)
+            lr_sample  = default_collate(batch[0]).to(self.device)
+            hr_spectra = default_collate(batch[1]).to(self.device)
             style = (
                 None if batch[2][0] is None 
-                else default_collate(batch[2]).to(device)
+                else default_collate(batch[2]).to(self.device)
             )
             return lr_sample, hr_spectra, style
         
@@ -133,9 +132,10 @@ class SpectrumMonitor(Monitor):
     def get_power_spectrum(self, field):
         box_size = self.box_size
         grid_size = self.grid_size
+        cell_size = box_size / grid_size
         mass = self.particle_mass
         density = cic_density_field(field, box_size, grid_size)[0, 0, ...]
-        density *= mass
+        density *= mass / (cell_size**3)
         sr_ks, sr_spectrum, _ = power_spectrum(density, box_size, grid_size)
         return sr_ks, sr_spectrum
     

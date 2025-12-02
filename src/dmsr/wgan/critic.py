@@ -10,13 +10,14 @@ This file defines the critic model used by the DMSR-WGAN model.
 
 import torch.nn as nn
 
+from torch import save, load
 from torch import concat, rand, autograd
+from pathlib import Path
+
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import ResidualBlock
-from ..field_analysis import cic_density_field
-from ..field_analysis import nn_distance_field
-from ..data_tools import pixel_unshuffle
-from ..data_tools import crop
+from ..field_operations import cic_density_field, nn_distance_field
+from ..data_tools import pixel_unshuffle, crop
 
 
 class DMSRCritic(nn.Module):
@@ -34,24 +35,39 @@ class DMSRCritic(nn.Module):
             density_scale_factor = None,
             style_size = None,
             use_nn_distance_features = False,
+            nn_smoothing = 0.01,
+            nn_numerator = -1,
             **kwargs
         ):
         super().__init__()
         self.input_size = input_size
         self.input_channels = input_channels
         self.base_channels = base_channels
+        self.density_scale = density_scale_factor
         self.style_size = style_size
         self.use_nn_distance_features = use_nn_distance_features
         self.build_critic_components()
         
         if density_scale_factor is not None:
-            self.density_scale = density_scale_factor
             self.density_size = density_scale_factor * input_size
             self.prepare_batch = self.prepare_batch_hr
         elif use_nn_distance_features:
+            self.nn_smoothing = nn_smoothing
+            self.nn_numerator = nn_numerator
             self.prepare_batch = self.prepare_batch_nn
         else:
             self.prepare_batch = self.prepare_batch_lr_hr
+            
+            
+    def get_arch_params(self):
+        return {
+            'input_size'               : self.input_size,
+            'input_channels'           : self.input_channels,
+            'base_channels'            : self.base_channels,
+            'style_size'               : self.style_size,
+            'density_scale_factor'     : self.density_scale,
+            'use_nn_distance_features' : self.use_nn_distance_features
+        }
     
         
     def layer_channels_and_sizes(self):
@@ -64,15 +80,20 @@ class DMSRCritic(nn.Module):
         block in each branch.
         """
         # Main residual blocks
-        size = self.input_size
+        MAX_DATA_SIZE = 10
+        data_size = self.input_size
         channels_curr = self.base_channels
         channels_next = channels_curr * 2
         
+        # Each residual block doubles the number of channels in the data and 
+        # reduces the size of its input to (N - 4) // 2, where N is the input 
+        # size. The loop below adds residual blocks until the data size is less
+        # than or equal to MAX_DATA_SIZE.
         blocks = []
-        while size >= 10:
-            size = (size - 4) // 2
+        while data_size >= MAX_DATA_SIZE:
+            data_size = (data_size - 4) // 2
             blocks.append(
-                (channels_curr, channels_next, size)
+                (channels_curr, channels_next, data_size)
             )
             channels_curr = channels_next
             channels_next = channels_curr * 2
@@ -141,7 +162,11 @@ class DMSRCritic(nn.Module):
     
     
     def prepare_batch_lr_hr(self, hr_batch, lr_batch, box_size):
-        """Prepare input data for the critic.
+        """Prepares input data for the critic by computing density fields for 
+        both lr and hr data. 
+        
+        Returns a tensor with the following channels:
+            [hr density, lr density, hr particle data, lr particle data]
         
         Displacement coordinates are assumed to be contained in the first three
         channels of the given high- and low-resolution data.
@@ -154,7 +179,16 @@ class DMSRCritic(nn.Module):
     
     
     def prepare_batch_hr(self, hr_batch, lr_batch, box_size):
-        """Prepare input data for the critic.
+        """Prepares input data for the critic by computing a density field for
+        the hr data. The resolution of the density field is set by 
+        `self.density_size`. This will be larger than the size/resolution of
+        the particle data by a factor of `self.density_scale`. A pixel 
+        unshuffle operation is used to reshape the density field into a
+        multi-channel tensor with the same spatial resolution as the particle
+        data. 
+        
+        A tensor with the following channels is then returned:
+            [denisty field channels, hr particle data, lr particle data]
         
         Displacement coordinates are assumed to be contained in the first three
         channels of the given high- and low-resolution data.
@@ -167,7 +201,15 @@ class DMSRCritic(nn.Module):
     
     
     def prepare_batch_nn(self, hr_batch, lr_batch, box_size):
-        """Prepare input data for the critic.
+        """Prepare input data for the critic by computing a density field for
+        the hr data. Feature maps encoding the distance between neighbouring
+        particles are also computed. The feature maps are reminiscent of the
+        gravitational potential between particles and uses a formula with the
+        following form:
+            f = numerator_const / (distance + smoothing_const)
+        
+        Returns a tenors with the following channels:
+            [nn feature maps, density field, hr particles, lr particles]
         
         Displacement coordinates are assumed to be contained in the first three
         channels of the given high- and low-resolution data.
@@ -179,8 +221,8 @@ class DMSRCritic(nn.Module):
         all_fields = concat((hr_density, hr_batch, lr_batch), dim=1)
         all_fields = crop(all_fields, 1)
         nn_distance = nn_distance_field(hr_particles, box_size)
-        nn_distance = -1 / (nn_distance + 0.01)
-        return concat((nn_distance, all_fields), dim=1),
+        nn_features = self.nn_numerator / (nn_distance + self.nn_smoothing)
+        return concat((nn_features, all_fields), dim=1),
     
     
     def gradient_penalty(
@@ -215,3 +257,35 @@ class DMSRCritic(nn.Module):
             + 0 * score
         )
         return penalty
+    
+    
+    #=========================================================================#
+    #                         Saving and Loading
+    #=========================================================================#
+    
+    def save(self, model_dir=Path('./data/model/')):
+        """Save the model state dictionary and architecture metadata.
+        """
+        model_dir.mkdir(parents=True, exist_ok=True)
+        save(self.state_dict(), model_dir / 'critic.pth')
+        crit_arch_metadata = self.get_arch_params()
+        save(crit_arch_metadata, model_dir / 'crit_arch.pth')
+    
+    
+    @classmethod
+    def load(cls, model_dir, device):
+        """Load a saved model
+        """
+        arch = load(
+            model_dir / 'crit_arch.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        crit_state_dict = load(
+            model_dir / 'critic.pth', 
+            map_location=device, 
+            weights_only=True
+        )
+        critic = DMSRCritic(**arch).to(device)
+        critic.load_state_dict(crit_state_dict)
+        return critic

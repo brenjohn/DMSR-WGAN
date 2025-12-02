@@ -85,5 +85,5 @@ def cic_density_field(displacements, box_size, grid_size=None):
         
         density[n].view(-1).index_add_(0, index, source.float())
     
-    density = density / cell_size**3
+    # density = density / cell_size**3
     return density[:, None, ...]

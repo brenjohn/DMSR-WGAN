@@ -1,0 +1,50 @@
+{
+  "num_epochs" : 1,
+  "batch_size" : 2,
+  "output_dir" : "./velocity_run/",
+  "supervised_epochs" : 2,
+  
+  "generator" : {
+      "grid_size"      : 20,
+      "input_channels" : 6,
+      "base_channels"  : 4,
+      "crop_size"      : 2,
+      "scale_factor"   : 2
+  },
+  
+  "critic" : {
+      "input_size"           : 32,
+      "input_channels"       : 20,
+      "base_channels"        : 4,
+      "density_scale_factor" : 2
+  },
+  
+  "data" : {
+      "train_data_dir"        : "./train_data",
+      "valid_data_dir"        : "./valid_data",
+      "include_velocities"    : true,
+      "include_scale_factors" : false,
+      "augment"               : true
+  },
+  
+  "optimizers" : {
+      "lr_G" : 0.00001,
+      "lr_C" : 0.00002,
+      "b1"   : 0.0,
+      "b2"   : 0.99
+  },
+  
+  "monitoring" : {
+      "batch_report_rate" : 2,
+      "monitors" : {
+          "loss_monitor"       : null,
+          "samples_monitor_1"  : {
+              "patch_number"   : 1, 
+              "velocities"     : true, 
+              "scale_factors"  : false
+          },
+          "checkpoint_monitor" : null,
+          "spectrum_monitor"   : null
+      }
+  }
+}

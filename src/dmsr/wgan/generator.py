@@ -11,6 +11,9 @@ This file defines the generator model used by the DMSR-WGAN model.
 import torch.nn as nn
 
 from torch import randn
+from torch import save, load
+from pathlib import Path
+
 from ..data_tools import crop
 from .conv import DMSRConv, DMSRStyleConv
 from .blocks import HBlock
@@ -28,18 +31,32 @@ class DMSRGenerator(nn.Module):
             crop_size=0,
             scale_factor=4,
             style_size=None,
+            nn_distance=False,
             **kwargs
         ):
         super().__init__()
         self.grid_size      = grid_size
         self.input_channels = input_channels
         self.base_channels  = base_channels
-        self.scale_factor   = scale_factor
         self.crop_size      = crop_size
+        self.scale_factor   = scale_factor
         self.style_size     = style_size
+        self.nn_distance    = nn_distance
         
         self.build_generator_components()
         self.compute_input_padding()
+        
+        
+    def get_arch_params(self):
+        return {
+            'grid_size'      : self.grid_size,
+            'input_channels' : self.input_channels,
+            'base_channels'  : self.base_channels,
+            'crop_size'      : self.crop_size,
+            'scale_factor'   : self.scale_factor,
+            'style_size'     : self.style_size,
+            'nn_distance'    : self.nn_distance
+        }
 
 
     def build_generator_components(self):
@@ -75,26 +92,32 @@ class DMSRGenerator(nn.Module):
         )
         self.initial_relu = nn.PReLU()
         
-        scale = 1
+        curr_scale = 1
         curr_chan = self.base_channels
         next_chan = curr_chan // 2
         prim_chan = self.input_channels
-        N = self.grid_size
+        data_size = self.grid_size
         noise_shapes = []
         
+        # Add H-Blocks to upscale data by the desired scale factor. Also,
+        # compute channel sizes and noise variable shapes for each H-block.
         self.blocks = nn.ModuleList()
-        while scale < self.scale_factor:
+        while curr_scale < self.scale_factor:
             self.blocks.append(
                 HBlock(curr_chan, next_chan, prim_chan, self.style_size)
             )
             
-            scale *= 2
+            # Each H-block doubles the scale factor and halves the number of
+            # channels. For an input size of N, the output of a H-block is 
+            # 2N - 4 and its 1st and 2nd noise maps have shapes N and 2N - 2
+            # respectively.
+            curr_scale *= 2
             curr_chan = next_chan
             next_chan = curr_chan // 2
-            noise_shapes.append((N, 2 * N - 2))
-            N = 2 * N - 4
+            noise_shapes.append((data_size, 2 * data_size - 2))
+            data_size = 2 * data_size - 4
         
-        self.output_size = N - 2 * self.crop_size
+        self.output_size = data_size - 2 * self.crop_size
         self.noise_shapes = noise_shapes
         
         
@@ -107,12 +130,15 @@ class DMSRGenerator(nn.Module):
         version of the inner region. This method computes the sizes of these 
         regions.
         """
-        if self.output_size % self.scale_factor != 0:
+        output_size = self.output_size + 2 * self.nn_distance
+        if output_size % self.scale_factor != 0:
             print('WARNING: inner region of generator input not an integer')
-        self.inner_region = self.output_size // self.scale_factor
+            print('output, scale =', output_size, self.scale_factor)
+        self.inner_region = output_size // self.scale_factor
         
         if (self.grid_size - self.inner_region) % 2 != 0:
             print('WARNING: padding of generator input not an integer')
+            print(f'grid = {self.grid_size}, inner = {self.inner_region}')
         self.padding = (self.grid_size - self.inner_region) // 2
 
 
@@ -144,3 +170,68 @@ class DMSRGenerator(nn.Module):
             latent_variable[i] = noise
             
         return latent_variable
+    
+    
+    def tile_latent_variable(self, latent_variable, size, device):
+        """Applies periodic boundary conditions to the latent variable 
+        components and then tiles (repeats) them along the batch dimension.
+        
+        This is used for generating noise maps that can be used to upscale
+        entire snapshots that have been divided into patches. For the upscaled
+        data to be consistent across patch boundaries, the noise used for
+        neighbouring patches need to match where ever they overlap. This can
+        be ensured by using the same noise map for each patch and applying
+        periodic boundary consitions to the noise.
+        """
+        # The 1st and 2nd noise maps for a H-block must have periodic borders 
+        # of size 4 and 6 respectively.
+        [self.wrap_border(noise[0], 4) for noise in latent_variable]
+        [self.wrap_border(noise[1], 6) for noise in latent_variable]
+        return [(
+            noise[0].tile(size, 1, 1, 1, 1).to(device), 
+            noise[1].tile(size, 1, 1, 1, 1).to(device)
+            ) for noise in latent_variable
+        ]
+    
+    
+    def wrap_border(self, data, size):
+        """Copies data from the far side of the array to the near side for the 
+        last three spatial dimensions, effectively imposing periodic bounary 
+        conditions.
+        """
+        data[:, :, 0:size, :, :] = data[:, :, -size:, :, :]
+        data[:, :, :, 0:size, :] = data[:, :, :, -size:, :]
+        data[:, :, :, :, 0:size] = data[:, :, :, :, -size:]
+    
+    
+    #=========================================================================#
+    #                         Saving and Loading
+    #=========================================================================#
+    
+    def save(self, model_dir=Path('./data/model/')):
+        """Save the model state dictionary and architecture metadata.
+        """
+        model_dir.mkdir(parents=True, exist_ok=True)
+        save(self.state_dict(), model_dir / 'generator.pth')
+        gen_arch_metadata = self.get_arch_params()
+        save(gen_arch_metadata, model_dir / 'gen_arch.pth')
+    
+    
+    @classmethod
+    def load(cls, model_dir, device):
+        """Load a saved model
+        """
+        # Load the generator model.
+        arch = load(
+            model_dir / 'gen_arch.pth', 
+            map_location=device, 
+            weights_only=False
+        )
+        gen_state_dict = load(
+            model_dir / 'generator.pth', 
+            map_location=device, 
+            weights_only=True
+        )
+        generator = DMSRGenerator(**arch).to(device)
+        generator.load_state_dict(gen_state_dict)
+        return generator
