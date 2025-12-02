@@ -58,11 +58,9 @@ class DMSRWGAN:
         
     def compute_crop_sizes(self):
         """
-        To condition the critic model on lr data, the lr data needs to be
-        upscaled using linear interpolation. On top of this, the data needs to
-        be cropped before and after the interpolation to remove excess cells in
-        the data. This method computes the crop sizes for these operations
-        using the input sizes of the generator and critic models.
+        Computes the crop sizes for the crop operations that happen immediately
+        before and after the linear upscaling operation for lr data used for
+        conditioning the critic model.
         """
         lr_size = self.generator.module.grid_size
         hr_size = self.critic.module.input_size
@@ -72,7 +70,7 @@ class DMSRWGAN:
         # Calculate the crop size for the lr data.
         self.lr_crop_size = (lr_size - hr_size // scale) // 2
         
-        # Calculate the final crop size for the upscaled lr data.
+        # Calculate the crop size for the linearly upscaled lr data.
         self.hr_crop_size = scale * (lr_size - 2 * self.lr_crop_size) - hr_size
         self.hr_crop_size //=2
         
@@ -88,13 +86,23 @@ class DMSRWGAN:
         self.batch_size = batch_size
         
         
-    def set_optimizers(self, lr_G=0.000001, lr_C=0.000002, b1=0.0, b2=0.99):
+    def set_optimizers(self, lr_G=1e-6, lr_C=2e-6, b1=0.0, b2=0.99):
         self.optimizer_g = optim.Adam(
             self.generator.parameters(), lr=lr_G, betas=(b1, b2)
         )
         self.optimizer_c = optim.Adam(
             self.critic.parameters(), lr=lr_C, betas=(b1, b2)
         )
+        
+    
+    def set_learning_rates(self, lr_G = None, lr_C = None, **kwargs):
+        if lr_G is not None:
+            for param_group in self.optimizer_g.param_groups:
+                param_group['lr'] = lr_G
+        
+        if lr_C is not None:
+            for param_group in self.optimizer_c.param_groups:
+                param_group['lr'] = lr_C
         
     
     def set_monitor(self, monitor):
@@ -115,6 +123,7 @@ class DMSRWGAN:
                 dist.barrier()
             
             for batch_num, batch in enumerate(self.data):
+                batch = self.move_batch_to_device(*batch)
                 losses = train_step(*batch)
                 
                 # End of batch processing.
@@ -129,6 +138,16 @@ class DMSRWGAN:
             
         if self.distributed:
             dist.barrier()
+            
+    
+    def move_batch_to_device(self, lr_batch, hr_batch, style=None):
+        """Move the given data to the device.
+        """
+        lr_batch = lr_batch.to(self.device)
+        hr_batch = hr_batch.to(self.device)
+        if style is not None:
+            style = style.to(self.device)
+        return lr_batch, hr_batch, style
     
         
     #=========================================================================#
@@ -136,12 +155,6 @@ class DMSRWGAN:
     #=========================================================================#
                 
     def generator_supervised_step(self, lr_batch, hr_batch, style=None):
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Use the generator to create fake data.
         batch_size, device = self.batch_size, self.device
         z = self.generator.module.sample_latent_space(batch_size, device)
@@ -158,12 +171,6 @@ class DMSRWGAN:
     
     
     def critic_supervised_step(self, lr_batch, hr_batch, style=None):
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(
@@ -183,12 +190,6 @@ class DMSRWGAN:
     def train_step(self, lr_batch, hr_batch, style=None):
         """Train step for the WGAN.
         """
-        # Move data to the device.
-        lr_batch = lr_batch.to(self.device)
-        hr_batch = hr_batch.to(self.device)
-        if style is not None:
-            style = style.to(self.device)
-        
         # Prepare upscaled data
         us_batch = crop(lr_batch, self.lr_crop_size)
         us_batch = interpolate(

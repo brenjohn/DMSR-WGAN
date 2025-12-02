@@ -96,6 +96,8 @@ def setup_wgan(params, device, is_distributed):
     """
     if 'gan' in params:
         gan = DMSRWGAN.load(Path(params['gan']), device, is_distributed)
+        if "optimizers" in params:
+            gan.set_learning_rates(**params["optimizers"])
                             
     else:
         generator = DMSRGenerator(**params["generator"])

@@ -92,26 +92,32 @@ class DMSRGenerator(nn.Module):
         )
         self.initial_relu = nn.PReLU()
         
-        scale = 1
+        curr_scale = 1
         curr_chan = self.base_channels
         next_chan = curr_chan // 2
         prim_chan = self.input_channels
-        N = self.grid_size
+        data_size = self.grid_size
         noise_shapes = []
         
+        # Add H-Blocks to upscale data by the desired scale factor. Also,
+        # compute channel sizes and noise variable shapes for each H-block.
         self.blocks = nn.ModuleList()
-        while scale < self.scale_factor:
+        while curr_scale < self.scale_factor:
             self.blocks.append(
                 HBlock(curr_chan, next_chan, prim_chan, self.style_size)
             )
             
-            scale *= 2
+            # Each H-block doubles the scale factor and halves the number of
+            # channels. For an input size of N, the output of a H-block is 
+            # 2N - 4 and its 1st and 2nd noise maps have shapes N and 2N - 2
+            # respectively.
+            curr_scale *= 2
             curr_chan = next_chan
             next_chan = curr_chan // 2
-            noise_shapes.append((N, 2 * N - 2))
-            N = 2 * N - 4
+            noise_shapes.append((data_size, 2 * data_size - 2))
+            data_size = 2 * data_size - 4
         
-        self.output_size = N - 2 * self.crop_size
+        self.output_size = data_size - 2 * self.crop_size
         self.noise_shapes = noise_shapes
         
         
@@ -169,7 +175,16 @@ class DMSRGenerator(nn.Module):
     def tile_latent_variable(self, latent_variable, size, device):
         """Applies periodic boundary conditions to the latent variable 
         components and then tiles (repeats) them along the batch dimension.
+        
+        This is used for generating noise maps that can be used to upscale
+        entire snapshots that have been divided into patches. For the upscaled
+        data to be consistent across patch boundaries, the noise used for
+        neighbouring patches need to match where ever they overlap. This can
+        be ensured by using the same noise map for each patch and applying
+        periodic boundary consitions to the noise.
         """
+        # The 1st and 2nd noise maps for a H-block must have periodic borders 
+        # of size 4 and 6 respectively.
         [self.wrap_border(noise[0], 4) for noise in latent_variable]
         [self.wrap_border(noise[1], 6) for noise in latent_variable]
         return [(
