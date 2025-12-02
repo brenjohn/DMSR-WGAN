@@ -28,7 +28,12 @@ def read_positions(file, chunk, chunk_size):
     return positions
 
 
-def compute_cic_density_fields(data_dir, snapshot_pattern, chunk_size):
+def compute_cic_density_fields(
+        data_dir, 
+        snapshot_pattern, 
+        chunk_size, 
+        cic_grid_size = None
+    ):
     """Calculates the CIC density field for all snapshots and saves the result 
     as a NumPy file. The computation is performed in chunks to manage memory 
     usage for large files.
@@ -41,6 +46,9 @@ def compute_cic_density_fields(data_dir, snapshot_pattern, chunk_size):
         density = 0
         num_particles = grid_size**3
         
+        if cic_grid_size is None:
+            cic_grid_size = grid_size
+        
         with h5.File(snapshot_file, 'r') as snapshot:
             for chunk in range(0, num_particles, chunk_size):
                 print(
@@ -48,7 +56,7 @@ def compute_cic_density_fields(data_dir, snapshot_pattern, chunk_size):
                     end=''
                 )
                 positions = read_positions(snapshot, chunk, chunk_size)
-                density += cloud_in_cells(positions, grid_size, box_size)
+                density += cloud_in_cells(positions, cic_grid_size, box_size)
             
             np.save(data_dir / (snapshot_file.stem + '_density.npy'), density)
 
@@ -79,9 +87,17 @@ if __name__ == "__main__":
         help='The number of particles to read from disk at any one time.'
     )
     
+    parser.add_argument(
+        '--cic_grid_size', 
+        type=int, 
+        default=None,
+        help='The grid size for the cic density field.'
+    )
+    
     args = parser.parse_args()
     compute_cic_density_fields(
         args.data_dir, 
         args.pattern, 
-        args.chunk_size
+        args.chunk_size,
+        args.cic_grid_size
     )
