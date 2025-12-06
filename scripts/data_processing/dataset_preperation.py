@@ -80,7 +80,7 @@ def create_patches(patch_args):
         for num, snapshot in enumerate(patch_args['snapshots']):
             task_Args = patch_args | {'snapshot' : snapshot, 'snap_num' : num}
             tasks.append(task_Args)
-        pool.starmap(create_fields, tasks)
+        pool.map(create_fields, tasks)
 
 
 def create_metadata(LR_args, HR_args):
@@ -101,7 +101,7 @@ def create_metadata(LR_args, HR_args):
     LR_patch_size = LR_args['inner_size'] + 2 * LR_args['padding']
     HR_patch_size = HR_args['inner_size'] + 2 * HR_args['padding']
     
-    meta_file = LR_args.output_dir / 'metadata.npy'
+    meta_file = LR_args['output_dir'] / 'metadata.npy'
     np.save(meta_file, {
         'box_size'        : box_size,
         'LR_patch_length' : LR_patch_size * box_size / LR_grid_size,
@@ -141,7 +141,7 @@ def read_args(args):
     
     LR_snapshots = sorted(data_dir.glob(LR_config['snapshot_glob']))
     HR_snapshots = sorted(data_dir.glob(HR_config['snapshot_glob']))
-    
+
     base_args = {
         'output_dir'         : output_dir,
         'stride'             : base_config['stride'],
