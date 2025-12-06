@@ -9,11 +9,13 @@ This script will create a dataset for training a DMSR-WGAN from swift
 snapshots. It creates field patches from simulation snapshots and saves them as 
 individual HDF5 files.
 
-Each file contains represents a patch, and can include multiple datasets :
+Each file represents a patch, and can include multiple datasets :
 (LR displacement, LR velocity, HR displacement, HR velocity, scale factor)
 """
 
+import json
 import h5py
+import argparse
 import numpy as np
 import multiprocessing as mp
 
@@ -22,177 +24,188 @@ from swift_tools.fields import cut_field
 from swift_tools.data import read_metadata, read_particle_data
 from swift_tools.fields import get_displacement_field, get_velocity_field
 
+FIELD_METHODS = {
+    'Coordinates' : get_displacement_field,
+    'Velocities'  : get_velocity_field,
+}
 
-def create_fields(
-        output_dir,
-        prefix,
-        particle_data_name, 
-        get_field_data, 
-        snapshot,
-        patch_num_start,
-        patches_per_snapshot,
-        patch_size,
-        stride,
-        padding
-    ):
+def create_fields(patch_args):
     """
-    Creates field patches from simulation snapshots and saves them as 
-    individual HDF5 files.
+    Reads particle data, converts it into a continuous field (displacement or 
+    velocity), and cuts the field into patches. Each patch is saved as a 
+    dataset within a single HDF5 file, using append mode.
     """
-    dataset_name = f'{prefix}_{particle_data_name}'
+    snapshot = patch_args['snapshot']
+    particle_data_name = patch_args['particle_data_name']
+    dataset_name = f'{patch_args["prefix"]}_{particle_data_name}'
     
     grid_size, box_size, mass, h, a = read_metadata(snapshot)
     IDs = read_particle_data(snapshot, 'ParticleIDs')
     particle_data = read_particle_data(snapshot, particle_data_name)
     
     particle_data = particle_data.transpose()
-    field_data = get_field_data(particle_data, IDs, box_size, grid_size)
+    field_data = FIELD_METHODS[particle_data_name](
+        particle_data, IDs, box_size, grid_size
+    )
     
     patches = cut_field(
         field_data[None,...], 
-        patch_size, 
-        stride = stride, 
-        pad    = padding
+        patch_args['inner_size'],
+        stride = patch_args['stride'] * patch_args['inner_size'],
+        pad    = patch_args['padding']
     )
         
     for num, patch in enumerate(patches):
-        patch_num = patch_num_start + num
-        patch_file = output_dir / f"patch_{patch_num}.h5"
+        patch_num = patch_args['snap_num'] * patch_args['patches_per_snapshot']
+        patch_num += num
+        patch_file = patch_args['output_dir'] / f"patch_{patch_num}.h5"
         
         with h5py.File(patch_file, 'a') as file:
             file.create_dataset(dataset_name, data=patch, compression="gzip")
             file.attrs['scale_factor'] = a
+            
+            
+def create_patches(patch_args):
+    """Manages the parallel processing of multiple simulation snapshots by 
+    distributing `create_fields` tasks across a multiprocessing pool.
+    """
+    print(
+        'Creating', 
+        patch_args["prefix"], 
+        patch_args["particle_data_name"],
+        'patches.'
+    )
+    with mp.Pool(patch_args['num_procs']) as pool:
+        tasks = []
+        for num, snapshot in enumerate(patch_args['snapshots']):
+            task_Args = patch_args | {'snapshot' : snapshot, 'snap_num' : num}
+            tasks.append(task_Args)
+        pool.starmap(create_fields, tasks)
 
 
-#%% Parameters
-data_dir = Path('/media/brennan/Leavitt_data/data/DM_SR/')
-data_dir /= 'swift-sims/dmsr_z_runs_1Mpc/'
+def create_metadata(LR_args, HR_args):
+    """
+    Reads metadata from the first Low-Resolution (LR) and High-Resolution (HR) 
+    snapshot, calculates derived patch properties (physical length, size), 
+    and saves all configuration and metadata to a numpy file.
 
-output_dir = Path('../../data/dmsr_style_train/').resolve()
-# output_dir = Path('../../data/dmsr_style_valid/').resolve()
-output_dir.mkdir(parents=True, exist_ok=True)
-
-LR_snapshots = sorted(data_dir.glob('run[1-8]/064/snap_*.hdf5'))
-HR_snapshots = sorted(data_dir.glob('run[1-8]/128/snap_*.hdf5'))
-
-# LR_snapshots = sorted(data_dir.glob('run9/064/snap_*.hdf5'))
-# HR_snapshots = sorted(data_dir.glob('run9/128/snap_*.hdf5'))
-
-num_snaps = len(LR_snapshots)
-
-LR_padding = 2
-LR_inner_size = 16
-LR_patch_size = LR_inner_size + 2 * LR_padding
-
-HR_padding = 1
-HR_inner_size = 32
-HR_patch_size = HR_inner_size + 2 * HR_padding
-
-patches_per_snapshot = (64 // 16)**3
-stride = 1
-
-
-#%% Metadata
-print('Creating metadata.')
-LR_grid_size, box_size, LR_mass, h, a = read_metadata(LR_snapshots[0])
-HR_grid_size, box_size, HR_mass, h, a = read_metadata(HR_snapshots[0])
-
-meta_file = output_dir / 'metadata.npy'
-np.save(meta_file, {
-    'box_size'        : box_size,
-    'LR_patch_length' : LR_patch_size * box_size / LR_grid_size,
-    'HR_patch_length' : HR_patch_size * box_size / HR_grid_size,
-    'LR_patch_size'   : LR_patch_size,
-    'HR_patch_size'   : HR_patch_size,
-    'LR_inner_size'   : LR_inner_size,
-    'HR_inner_size'   : HR_inner_size,
-    'LR_padding'      : LR_padding,
-    'HR_padding'      : HR_padding,
-    'LR_mass'         : LR_mass,
-    'HR_mass'         : HR_mass,
-    'hubble'          : h
-})
-
-
-#%%
-num_procs = 14
-output_dir /= 'patches/'
-output_dir.mkdir(parents=True, exist_ok=True)
-
-print('Creating LR displacement patches.')
-with mp.Pool(num_procs) as pool:
-    tasks = []
-    for num, snapshot in enumerate(LR_snapshots):
-        tasks.append((
-            output_dir, 
-            'LR', 'Coordinates', 
-            get_displacement_field, 
-            snapshot,
-            patches_per_snapshot * num,
-            patches_per_snapshot,
-            LR_inner_size,
-            stride * LR_inner_size,
-            LR_padding
-        ))
-        
-    pool.starmap(create_fields, tasks)
-
-
-#%%
-print('Creating HR displacement patches.')
-with mp.Pool(num_procs) as pool:
-    tasks = []
-    for num, snapshot in enumerate(HR_snapshots):
-        tasks.append((
-            output_dir, 
-            'HR', 'Coordinates', 
-            get_displacement_field, 
-            snapshot,
-            patches_per_snapshot * num,
-            patches_per_snapshot,
-            HR_inner_size, 
-            stride * HR_inner_size,
-            HR_padding
-        ))
-        
-    pool.starmap(create_fields, tasks)
-
-
-#%%
-print('Creating LR velocity patches.')
-with mp.Pool(num_procs) as pool:
-    tasks = []
-    for num, snapshot in enumerate(LR_snapshots):
-        tasks.append((
-            output_dir, 
-            'LR', 'Velocities', 
-            get_velocity_field, 
-            snapshot,
-            patches_per_snapshot * num,
-            patches_per_snapshot,
-            LR_inner_size, 
-            stride * LR_inner_size,
-            LR_padding
-        ))
-        
-    pool.starmap(create_fields, tasks)
-
-
-#%%
-print('Creating HR velocity patches.')
-with mp.Pool(num_procs) as pool:
-    tasks = []
-    for num, snapshot in enumerate(HR_snapshots):
-        tasks.append((
-            output_dir, 
-            'HR', 'Velocities', 
-            get_velocity_field, 
-            snapshot,
-            patches_per_snapshot * num,
-            patches_per_snapshot,
-            HR_inner_size,
-            stride * HR_inner_size,
-            HR_padding
-        ))
+    It also updates the `LR_args` and `HR_args` dictionaries with the total 
+    number of patches expected per snapshot.
+    """
+    print('Creating metadata.')
+    LR_metadata = read_metadata(LR_args['snapshots'][0])
+    HR_metadata = read_metadata(HR_args['snapshots'][0])
+    LR_grid_size, box_size, LR_mass, h, a = LR_metadata
+    HR_grid_size, box_size, HR_mass, h, a = HR_metadata
     
-    pool.starmap(create_fields, tasks)
+    LR_patch_size = LR_args['inner_size'] + 2 * LR_args['padding']
+    HR_patch_size = HR_args['inner_size'] + 2 * HR_args['padding']
+    
+    meta_file = LR_args.output_dir / 'metadata.npy'
+    np.save(meta_file, {
+        'box_size'        : box_size,
+        'LR_patch_length' : LR_patch_size * box_size / LR_grid_size,
+        'HR_patch_length' : HR_patch_size * box_size / HR_grid_size,
+        'LR_patch_size'   : LR_patch_size,
+        'HR_patch_size'   : HR_patch_size,
+        'LR_inner_size'   : LR_args['inner_size'],
+        'HR_inner_size'   : HR_args['inner_size'],
+        'LR_padding'      : LR_args['padding'],
+        'HR_padding'      : HR_args['padding'],
+        'LR_mass'         : LR_mass,
+        'HR_mass'         : HR_mass,
+        'hubble'          : h
+    })
+    
+    patches_per_snapshot = (LR_grid_size // LR_args['inner_size'])**3
+    LR_args['patches_per_snapshot'] = patches_per_snapshot
+    HR_args['patches_per_snapshot'] = patches_per_snapshot
+
+
+def read_args(args):
+    """
+    Loads configuration settings from the specified JSON file, combines them 
+    with command-line arguments (like num_procs), and resolves file paths 
+    and glob patterns.
+    """
+    with open(args.config_file, 'r') as f:
+        config = json.load(f)
+        
+    base_config = config['base']
+    LR_config = config['LR_patch_args']
+    HR_config = config['HR_patch_args']
+    
+    output_dir = Path(base_config['output_dir'])
+    data_dir = Path(base_config['data_dir'])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    LR_snapshots = sorted(data_dir.glob(LR_config['snapshot_glob']))
+    HR_snapshots = sorted(data_dir.glob(HR_config['snapshot_glob']))
+    
+    base_args = {
+        'output_dir'         : output_dir,
+        'stride'             : base_config['stride'],
+        'include_velocities' : base_config['include_velocities'],
+        'num_procs'          : args.num_procs
+    }
+
+    HR_patch_args = base_args | {
+        'prefix'    :'HR',
+        'snapshots' : HR_snapshots, 
+        **HR_config
+    }
+    
+    LR_patch_args = base_args | {
+        'prefix'    :'LR',
+        'snapshots' : LR_snapshots, 
+        **LR_config
+    }
+    
+    return LR_patch_args, HR_patch_args
+    
+
+def main(args):
+    """Main entry point for the patch creation script.
+    
+    Handles setup, configuration loading, metadata creation, and orchestrates 
+    the parallel patch creation for both Low and High-Resolution data streams.
+    """
+    # Read the arguments and configuration file.
+    LR_patch_args, HR_patch_args = read_args(args)
+    
+    # Get metadata for the dataset and write it to the output dir. 
+    create_metadata(LR_patch_args, HR_patch_args)
+    
+    # Define fields to process.
+    fields = ('Coordinates',)
+    if LR_patch_args['include_velocities']:
+        fields += ('Velocities',)
+    
+    # Create patch files.
+    for patch_args in (LR_patch_args, HR_patch_args):
+        for particle_data_name in fields:
+            patch_args['particle_data_name'] = particle_data_name
+            create_patches(patch_args)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="Create a dataset."
+    )
+    
+    parser.add_argument(
+        '--config_file',
+        type=Path,
+        default='config.json',
+        help="Path to the JSON configuration file."
+    )
+    
+    parser.add_argument(
+        '--num_procs', 
+        type=int, 
+        default=1,
+        help="Number of parallel processes to use."
+    )
+    
+    args = parser.parse_args()
+    main(args)
