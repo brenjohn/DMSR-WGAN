@@ -53,7 +53,7 @@ def worker_compute_stats(task):
 
 
 def main(args):
-    dataset_dir = args.datset_dir
+    dataset_dir = args.dataset_dir
     patch_dir = dataset_dir / 'patches/'
     fields = ['LR_Coordinates', 'HR_Coordinates']
     if args.include_velocities:
@@ -90,13 +90,6 @@ if __name__ == '__main__':
         type=bool,
         default=False,
         help="Flag to also compute stats for velocity fields."
-    )
-    
-    parser.add_argument(
-        '--num_procs', 
-        type=int, 
-        default=1,
-        help="Number of parallel processes to use."
     )
     
     args = parser.parse_args()

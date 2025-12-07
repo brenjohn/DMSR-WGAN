@@ -58,7 +58,7 @@ def create_fields(patch_args):
     for num, patch in enumerate(patches):
         patch_num = patch_args['snap_num'] * patch_args['patches_per_snapshot']
         patch_num += num
-        patch_file = patch_args['output_dir'] / f"patch_{patch_num}.h5"
+        patch_file = patch_args['patch_dir'] / f"patch_{patch_num}.h5"
         
         with h5py.File(patch_file, 'a') as file:
             file.create_dataset(dataset_name, data=patch, compression="gzip")
@@ -137,13 +137,15 @@ def read_args(args):
     
     output_dir = Path(base_config['output_dir'])
     data_dir = Path(base_config['data_dir'])
-    output_dir.mkdir(parents=True, exist_ok=True)
+    patch_dir = output_dir / 'patches'
+    patch_dir.mkdir(parents=True, exist_ok=True)
     
     LR_snapshots = sorted(data_dir.glob(LR_config['snapshot_glob']))
     HR_snapshots = sorted(data_dir.glob(HR_config['snapshot_glob']))
 
     base_args = {
         'output_dir'         : output_dir,
+        'patch_dir'          : patch_dir,
         'stride'             : base_config['stride'],
         'include_velocities' : base_config['include_velocities'],
         'num_procs'          : args.num_procs
