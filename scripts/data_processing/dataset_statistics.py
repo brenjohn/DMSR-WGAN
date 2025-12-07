@@ -7,6 +7,7 @@ Created on Sat Apr 12 21:31:22 2025
 """
 
 import h5py
+import argparse
 import numpy as np
 import multiprocessing as mp
 
@@ -51,24 +52,52 @@ def worker_compute_stats(task):
     return field, mean, standard_deviation
 
 
-#%%
-dataset_dir = Path('../../data/dmsr_style_train/').resolve()
-patch_dir = dataset_dir / 'patches/'
-fields = [
-    'LR_Coordinates', 'HR_Coordinates', 'LR_Velocities', 'HR_Velocities'
-]
+def main(args):
+    dataset_dir = args.datset_dir
+    patch_dir = dataset_dir / 'patches/'
+    fields = ['LR_Coordinates', 'HR_Coordinates']
+    if args.include_velocities:
+        fields += ['LR_Velocities', 'HR_Velocities']
+    
+    tasks = [(field, patch_dir) for field in fields]
+    stats = {}
+    
+    with mp.Pool(4) as pool:
+        results = pool.map(worker_compute_stats, tasks)
+            
+    # Process the results to populate the stats dictionary
+    for field, mean, std_dev in results:
+        stats[f'{field}_std'] = std_dev
+        stats[f'{field}_mean'] = mean
+    
+    print('stats computed:\n', stats)
+    np.save(dataset_dir / 'summary_stats.npy', stats)
 
-patches = list(patch_dir.iterdir())
-tasks = [(field, patch_dir) for field in fields]
-stats = {}
 
-with mp.Pool(4) as pool:
-    results = pool.map(worker_compute_stats, tasks)
-        
-# Process the results to populate the stats dictionary
-for field, mean, std_dev in results:
-    stats[f'{field}_std'] = std_dev
-    stats[f'{field}_mean'] = mean
-
-print('stats computed:\n', stats)
-np.save(dataset_dir / 'summary_stats.npy', stats)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="Create a dataset."
+    )
+    
+    parser.add_argument(
+        '--dataset_dir',
+        type=Path,
+        help="Path to the dataset."
+    )
+    
+    parser.add_argument(
+        '--include_velocities',
+        type=bool,
+        default=False,
+        help="Flag to also compute stats for velocity fields."
+    )
+    
+    parser.add_argument(
+        '--num_procs', 
+        type=int, 
+        default=1,
+        help="Number of parallel processes to use."
+    )
+    
+    args = parser.parse_args()
+    main(args)
