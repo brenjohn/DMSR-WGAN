@@ -3,11 +3,7 @@
 #SBATCH --chdir=./
 #SBATCH --output=dmsr_%j.out
 #SBATCH --error=dmsr_%j.err
-# SBATCH --ntasks=8
-# SBATCH --cpus-per-task=20
 #SBATCH --time=48:00:00
-# SBATCH --gres=gpu:4
-
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1  
 #SBATCH --gpus-per-node=4   
@@ -31,4 +27,4 @@ srun torchrun \
 --rdzv_id $RANDOM \
 --rdzv_backend c10d \
 --rdzv_endpoint $head_node_ip:29500 \
-torchrun_training.py
+../scripts/dmsr_train.py --parameter_file=./training_parameters.json
