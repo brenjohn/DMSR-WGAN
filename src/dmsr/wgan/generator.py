@@ -130,7 +130,7 @@ class DMSRGenerator(nn.Module):
         version of the inner region. This method computes the sizes of these 
         regions.
         """
-        output_size = self.output_size + 2 * self.nn_distance
+        output_size = self.output_size - 2 * self.nn_distance
         if output_size % self.scale_factor != 0:
             print('WARNING: inner region of generator input not an integer')
             print('output, scale =', output_size, self.scale_factor)

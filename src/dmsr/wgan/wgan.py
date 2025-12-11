@@ -63,8 +63,7 @@ class DMSRWGAN:
         conditioning the critic model.
         """
         lr_size = self.generator.module.grid_size
-        hr_size = self.critic.module.input_size
-        hr_size += 2 * self.critic.module.use_nn_distance_features
+        hr_size = self.generator.module.output_size
         scale = self.scale_factor
         
         # Calculate the crop size for the lr data.
