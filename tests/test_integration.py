@@ -114,7 +114,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
             **self.mock_valid_data_args
         )
         
-        parameter_file = '../training_examples/velocity_critic.json'
+        parameter_file = '../training_examples/velocity_critic.toml'
         output_dir = 'velocity_run'
         self._run(parameter_file, output_dir)
         
@@ -130,7 +130,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
             **self.mock_valid_data_args | {'include_velocities' : False}
         )
         
-        parameter_file = '../training_examples/original_critic.json'
+        parameter_file = '../training_examples/original_critic.toml'
         output_dir = 'original_run'
         self._run(parameter_file, output_dir)
         
@@ -146,11 +146,11 @@ class TestTrainingIntegrationTest(unittest.TestCase):
             **self.mock_valid_data_args | {'include_scales' : True}
         )
         
-        parameter_file = '../training_examples/style_critic.json'
+        parameter_file = '../training_examples/style_critic.toml'
         output_dir = 'style_run'
         self._run(parameter_file, output_dir)
         
-        parameter_file = '../training_examples/style_critic_restart.json'
+        parameter_file = '../training_examples/style_critic_restart.toml'
         output_dir = 'style_run_restart'
         self._run(parameter_file, output_dir)
     
@@ -170,7 +170,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
             }
         )
         
-        parameter_file = '../training_examples/nn_distance_critic.json'
+        parameter_file = '../training_examples/nn_distance_critic.toml'
         output_dir = 'nn_distance_run'
         self._run(parameter_file, output_dir)
         
@@ -185,6 +185,6 @@ class TestTrainingIntegrationTest(unittest.TestCase):
             **self.mock_valid_data_args | {'include_scales' : True}
         )
         
-        parameter_file = '../training_examples/distributed.json'
+        parameter_file = '../training_examples/distributed.toml'
         output_dir = 'distributed_run'
         self._run(parameter_file, output_dir, distributed=True)

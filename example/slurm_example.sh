@@ -27,4 +27,4 @@ srun torchrun \
 --rdzv_id $RANDOM \
 --rdzv_backend c10d \
 --rdzv_endpoint $head_node_ip:29500 \
-../scripts/dmsr_train.py --parameter_file=./training_parameters.json
+../scripts/dmsr_train.py --parameter_file=./training_parameters.toml

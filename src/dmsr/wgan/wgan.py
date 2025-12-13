@@ -11,6 +11,7 @@ This file define the DMSR-WGAN class.
 import torch.distributed as dist
 
 from pathlib import Path
+from numpy import ceil, floor
 from torch import optim
 from torch import save, load
 from torch.nn import MSELoss
@@ -67,11 +68,11 @@ class DMSRWGAN:
         scale = self.scale_factor
         
         # Calculate the crop size for the lr data.
-        self.lr_crop_size = (lr_size - hr_size // scale) // 2
+        self.lr_crop_size = int(floor((lr_size - ceil(hr_size / scale)) / 2))
         
         # Calculate the crop size for the linearly upscaled lr data.
         self.hr_crop_size = scale * (lr_size - 2 * self.lr_crop_size) - hr_size
-        self.hr_crop_size //=2
+        self.hr_crop_size //= 2
         
         
     def set_dataset(

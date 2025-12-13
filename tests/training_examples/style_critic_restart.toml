@@ -1,0 +1,30 @@
+# --- Top-Level Parameters ---
+num_epochs   = 1
+batch_size   = 4
+output_dir   = "./style_run_restart/"
+
+# Path to the pre-trained model checkpoint for restarting training.
+gan          = "./style_run/checkpoints/current_model"
+
+# --- Data Table ---
+[data]
+train_data_dir        = "./train_data"
+valid_data_dir        = "./valid_data"
+include_velocities    = true
+include_scale_factors = true
+augment               = true
+
+# --- Monitoring Table ---
+[monitoring]
+batch_report_rate = 2
+
+# The 'monitors' object is a nested table:
+[monitoring.monitors]
+loss_monitor       = "" 
+checkpoint_monitor = "" 
+spectrum_monitor   = ""
+
+[monitoring.monitors.samples_monitor_1]
+patch_number  = 1
+velocities    = true
+scale_factors = true

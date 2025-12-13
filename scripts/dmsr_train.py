@@ -10,7 +10,8 @@ Created on Tue Nov  4 17:52:29 2025
 # import sys
 # sys.path.append("../../src/")
 
-import json
+import shutil
+import tomllib
 import argparse
 from pathlib import Path
 
@@ -27,7 +28,7 @@ def main(parameter_file):
     data pipeline, sets up monitoring, and executes the training loop.
     It ensures the environment is properly cleaned up upon completion or error.
 
-    :param parameter_file: Path to the JSON file containing all training 
+    :param parameter_file: Path to the TOML file containing all training 
                            and model configuration parameters.
     :type parameter_file: pathlib.Path
     """
@@ -36,12 +37,13 @@ def main(parameter_file):
     
     try:
         # Read parameter file and create output directory.
-        with open(parameter_file, 'r') as file:
-            params = json.load(file)
+        with open(parameter_file, 'rb') as file:
+            params = tomllib.load(file)
         
         output_dir = Path(params["output_dir"])
         if is_main_process:
             output_dir.mkdir(exist_ok=True)
+        shutil.copyfile(parameter_file, output_dir / 'used_parameters.toml')
         
         # Create a DMSR-WGAN model.
         gan = setup_wgan(params, device, is_distributed)
@@ -92,7 +94,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--parameter_file', 
         type=Path, 
-        default='./training_velocity_critic.json',
+        default='./training_velocity_critic.toml',
         help="Path to the parameter file"
     )
     

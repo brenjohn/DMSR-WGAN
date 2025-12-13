@@ -1,0 +1,51 @@
+# --- Top-Level Parameters ---
+num_epochs   = 2
+batch_size   = 4
+output_dir   = "./nn_distance_run/"
+
+# --- Generator Table ---
+[generator]
+grid_size      = 20
+input_channels = 6
+base_channels  = 4
+crop_size      = 1
+scale_factor   = 2
+style_size     = 1
+nn_distance    = true
+
+# --- Critic Table ---
+[critic]
+input_size           = 32
+input_channels       = 19
+base_channels        = 4
+use_nn_distance_features = true
+style_size           = 1
+
+# --- Data Table ---
+[data]
+train_data_dir      = "./train_data"
+valid_data_dir      = "./valid_data"
+include_velocities  = true
+include_scale_factors = true
+augment             = true
+
+# --- Optimizers Table ---
+[optimizers]
+lr_G = 0.00001
+lr_C = 0.00002
+b1   = 0.0
+b2   = 0.99
+
+# --- Monitoring Table ---
+[monitoring]
+batch_report_rate = 16
+
+[monitoring.monitors]
+loss_monitor       = "" 
+checkpoint_monitor = "" 
+spectrum_monitor   = ""
+
+[monitoring.monitors.samples_monitor_1]
+patch_number  = 1
+velocities    = true
+scale_factors = true

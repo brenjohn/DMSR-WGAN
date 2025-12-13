@@ -13,7 +13,7 @@ Each file represents a patch, and can include multiple datasets :
 (LR displacement, LR velocity, HR displacement, HR velocity, scale factor)
 """
 
-import json
+import tomlib
 import h5py
 import argparse
 import numpy as np
@@ -128,8 +128,8 @@ def read_args(args):
     with command-line arguments (like num_procs), and resolves file paths 
     and glob patterns.
     """
-    with open(args.config_file, 'r') as f:
-        config = json.load(f)
+    with open(args.config_file, 'rb') as f:
+        config = tomlib.load(f)
         
     base_config = config['base']
     LR_config = config['LR_patch_args']
@@ -198,8 +198,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--config_file',
         type=Path,
-        default='config.json',
-        help="Path to the JSON configuration file."
+        default='config.toml',
+        help="Path to the TOML configuration file."
     )
     
     parser.add_argument(
