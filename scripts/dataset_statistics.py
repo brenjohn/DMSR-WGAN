@@ -87,8 +87,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         '--include_velocities',
-        type=bool,
-        default=False,
+        action='store_true',
         help="Flag to also compute stats for velocity fields."
     )
     

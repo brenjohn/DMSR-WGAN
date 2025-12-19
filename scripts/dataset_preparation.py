@@ -13,7 +13,7 @@ Each file represents a patch, and can include multiple datasets :
 (LR displacement, LR velocity, HR displacement, HR velocity, scale factor)
 """
 
-import tomlib
+import tomllib
 import h5py
 import argparse
 import numpy as np
@@ -63,7 +63,7 @@ def create_fields(patch_args):
         with h5py.File(patch_file, 'a') as file:
             file.create_dataset(dataset_name, data=patch, compression="gzip")
             file.attrs['scale_factor'] = a
-            
+ 
             
 def create_patches(patch_args):
     """Manages the parallel processing of multiple simulation snapshots by 
@@ -129,7 +129,7 @@ def read_args(args):
     and glob patterns.
     """
     with open(args.config_file, 'rb') as f:
-        config = tomlib.load(f)
+        config = tomllib.load(f)
         
     base_config = config['base']
     LR_config = config['LR_patch_args']
@@ -164,7 +164,7 @@ def read_args(args):
     }
     
     return LR_patch_args, HR_patch_args
-    
+
 
 def main(args):
     """Main entry point for the patch creation script.

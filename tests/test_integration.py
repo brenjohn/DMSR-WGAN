@@ -7,6 +7,7 @@ Created on Wed Aug  6 12:33:33 2025
 """
 
 import os
+import sys
 import shutil
 import tempfile
 import unittest
@@ -16,7 +17,7 @@ from pathlib import Path
 from dmsr.data_tools import generate_mock_dataset
 
 
-class TestTrainingIntegrationTest(unittest.TestCase):
+class TestTrainingIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
@@ -64,7 +65,7 @@ class TestTrainingIntegrationTest(unittest.TestCase):
     
     def _run(self, parameter_file, output_dir, distributed=False):
         command = [
-            'python', 
+            sys.executable,
             '../../scripts/dmsr_train.py', 
             f'--parameter_file={parameter_file}'
         ]
