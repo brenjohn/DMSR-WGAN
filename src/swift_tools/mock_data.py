@@ -74,4 +74,16 @@ def generate_mock_snapshot(name, snapshot_dir, size):
             chunks=vector_chunks, fillvalue=0
         )
         
+        dm_data.create_dataset(
+            'Potentials', shape=(grid_size**3,), 
+            dtype='f4', compression='gzip', compression_opts=4,
+            chunks=scalar_chunks, fillvalue=0
+        )
+        
+        dm_data.create_dataset(
+            'Softenings', shape=(grid_size**3,), 
+            dtype='f4', compression='gzip', compression_opts=4,
+            chunks=scalar_chunks, fillvalue=0
+        )
+        
         dm_data.create_dataset('Masses', data=np.array([mass], dtype='f8'))

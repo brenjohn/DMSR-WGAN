@@ -41,7 +41,7 @@ def main(args):
             
             file.create_dataset('HR_Power_Spectrum', data = spectrum)
         
-        
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Create a dataset."

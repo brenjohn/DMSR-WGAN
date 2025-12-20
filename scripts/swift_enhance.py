@@ -58,6 +58,7 @@ def swift_enhance(
     
     for lr_snapshot in lr_snapshots:
         ti = time.time()
+        lr_snapshot = Path(lr_snapshot)
         print('Upscaling', lr_snapshot)
         sr_snapshot = output_dir
         sr_snapshot /= f"{lr_snapshot.stem}{output_suffix}{lr_snapshot.suffix}"
