@@ -41,9 +41,10 @@ def swift_enhance(
     device = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Load the generator model and sample its latent space.
+    # Load the generator model and draw a sample from its latent space to
+    # enhance all snapshots.
     generator = DMSRGenerator.load(model_dir, device).eval()
-    z = generator.sample_latent_space(1, device)
+    generator.z = generator.sample_latent_space(1, device) # TODO: avoid monkey patch
     
     # Load any scaling parameters if they exist.
     scale_path = model_dir / "normalisation.npy"
@@ -64,7 +65,7 @@ def swift_enhance(
         sr_snapshot /= f"{lr_snapshot.stem}{output_suffix}{lr_snapshot.suffix}"
         
         # Enhance the low-resolution snapshot
-        enhance(lr_snapshot, sr_snapshot, generator, z, scale_params, device)
+        enhance(lr_snapshot, sr_snapshot, generator, scale_params, device)
         print(f'Upscaling took {time.time() - ti}')
 
 
