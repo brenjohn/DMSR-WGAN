@@ -15,8 +15,7 @@ import argparse
 import numpy as np
 
 from pathlib import Path
-from dmsr.wgan import DMSRGenerator
-from swift_tools.enhance import enhance
+from swift_tools.enhancer import DMSREnhancer
 
 
 def swift_enhance(
@@ -41,17 +40,8 @@ def swift_enhance(
     device = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Load the generator model and draw a sample from its latent space to
-    # enhance all snapshots.
-    generator = DMSRGenerator.load(model_dir, device).eval()
-    generator.z = generator.sample_latent_space(1, device) # TODO: avoid monkey patch
-    
-    # Load any scaling parameters if they exist.
-    scale_path = model_dir / "normalisation.npy"
-    scale_params = None
-    if scale_path.exists():
-        scale_params = np.load(scale_path, allow_pickle=True).item()
-        scale_params = {k : v.item() for k, v in scale_params.items()}
+    # Create an enhancer object to upscale lr data.
+    enhancer = DMSREnhancer(model_dir, device)
     
     # Get paths to low-resolution snapshots.
     lr_snapshots = np.sort(list(data_dir.glob(snapshot_pattern)))
@@ -65,7 +55,7 @@ def swift_enhance(
         sr_snapshot /= f"{lr_snapshot.stem}{output_suffix}{lr_snapshot.suffix}"
         
         # Enhance the low-resolution snapshot
-        enhance(lr_snapshot, sr_snapshot, generator, scale_params, device)
+        enhancer.enhance(lr_snapshot, sr_snapshot)
         print(f'Upscaling took {time.time() - ti}')
 
 
