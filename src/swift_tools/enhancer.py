@@ -64,7 +64,7 @@ class DMSREnhancer:
         self.z = self.generator.sample_latent_space(1, self.device)
         
     
-    def prepare_sr_snapshot(self, lr_file, sr_file):
+    def prepare_sr_snapshot(self, lr_file, sr_file, use_compression):
         """Factory function to create a sr snapshot for the given lr snapshot 
         and a writer object to handle writing enhanced data to it.
         """
@@ -73,7 +73,8 @@ class DMSREnhancer:
             sr_file,
             self.upscale_factor,
             self.include_velocities,
-            self.chunk_size
+            self.chunk_size,
+            use_compression
         )
         
     
@@ -124,7 +125,7 @@ class DMSREnhancer:
         return DataLoader(dataset, batch_size=self.batch_size, pin_memory=True)
 
     
-    def enhance(self, lr_path, sr_path):
+    def enhance(self, lr_path, sr_path, use_compression):
         """Use the generator to enhance the snapshot at `lr_path` and save the 
         result in a snapshot file at `sr_path`
         """
@@ -139,7 +140,9 @@ class DMSREnhancer:
             
             # Create the sr snapshot to write enhanced data to and get a writer
             # object to handle writing data to it.
-            writer = self.prepare_sr_snapshot(lr_file, sr_file)
+            writer = self.prepare_sr_snapshot(
+                lr_file, sr_file, use_compression
+            )
             
             # Enhance the lr patches into sr patches and write them to disk.
             self.upscale_patches(writer, lr_patches)

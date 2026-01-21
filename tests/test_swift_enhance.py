@@ -115,8 +115,6 @@ class TestSwiftEnhance(unittest.TestCase):
             LR_size=32,
             HR_size=32
         )
-        # Note: adjust snapshot_dir search if generate_mock_snapshots 
-        # creates a 'run1' subfolder.
         
         # 2. Act: Run the script
         # Using a relative path to the script from the temp_dir

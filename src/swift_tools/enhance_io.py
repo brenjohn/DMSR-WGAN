@@ -14,16 +14,33 @@ from .fields import get_displacement_field, get_velocity_field
 
 
 def prepare_sr_snapshot(
-        lr_file, sr_file, upscale_factor, include_velocities, chunk_size
+        lr_file, 
+        sr_file, 
+        upscale_factor, 
+        include_velocities, 
+        chunk_size,
+        use_compression
     ):
     """Factory function to create a sr snapshot for the given lr snapshot and
     a writer object to handle writing enhanced data to it.
     """
+    compression = {
+        'comp_type'  : 'gzip' if use_compression else None,
+        'comp_level' : 4 if use_compression else None
+    }
     # Copy all data that won't be enhanced from the lr file to the sr file.
-    copy_metadata(lr_file, sr_file, upscale_factor, include_velocities)
+    copy_metadata(
+        lr_file, sr_file, upscale_factor, include_velocities, compression
+    )
     
     # Create a chunk writer to write enhanced patches to the sr file.
-    return ChunkWriter(sr_file, include_velocities, upscale_factor, chunk_size)
+    return ChunkWriter(
+        sr_file, 
+        include_velocities, 
+        upscale_factor, 
+        chunk_size, 
+        compression=compression
+    )
 
 
 
@@ -39,13 +56,15 @@ class ChunkWriter:
             include_velocities, 
             upscale_factor,
             chunk_size,
-            batches_per_chunk = 4
+            batches_per_chunk = 4,
+            compression = {'comp_type' : 'gzip', 'comp_level' : 4},
         ):
-        self.file = file
+        self.file               = file
         self.include_velocities = include_velocities
-        self.upscale_factor = upscale_factor
-        self.chunk_size = chunk_size
-        self.batches_per_chunk = batches_per_chunk
+        self.upscale_factor     = upscale_factor
+        self.chunk_size         = chunk_size
+        self.batches_per_chunk  = batches_per_chunk
+        self.compression        = compression
         
         self.grid_size = file['ICs_parameters'].attrs['Grid Resolution']
         self.grid_size *= upscale_factor
@@ -66,23 +85,26 @@ class ChunkWriter:
         vector_chunks = (chunk_dim, 3)
         scalar_chunks = (chunk_dim,)
         
+        comp_type  = self.compression['comp_type']
+        comp_level = self.compression['comp_level']
+        
         dm_data = self.file['DMParticles']
         self.pos_dset = dm_data.create_dataset(
             'Coordinates', shape=(self.grid_size**3, 3), 
-            dtype='f8', compression='gzip', compression_opts=4,
+            dtype='f8', compression=comp_type, compression_opts=comp_level,
             chunks=vector_chunks
         )
         
         self.ids_dset = dm_data.create_dataset(
             'ParticleIDs', shape=(self.grid_size**3,), 
-            dtype='u8', compression='gzip', compression_opts=4,
+            dtype='u8', compression=comp_type, compression_opts=comp_level,
             chunks=scalar_chunks
         )
         
         if self.include_velocities:
             self.vel_dset = dm_data.create_dataset(
                 'Velocities', shape=(self.grid_size**3, 3), 
-                dtype='f4', compression='gzip', compression_opts=4,
+                dtype='f4', compression=comp_type, compression_opts=comp_level,
                 chunks=vector_chunks
             )
     
@@ -117,7 +139,9 @@ class ChunkWriter:
 
 
 
-def copy_metadata(lr_file, sr_file, upscale_factor, include_velocities):
+def copy_metadata(
+        lr_file, sr_file, upscale_factor, include_velocities, compression
+    ):
     """Copies data from the given lr_file to the sr file. Only data that is not
     enhanced by the generator is copied.
     """
@@ -143,17 +167,25 @@ def copy_metadata(lr_file, sr_file, upscale_factor, include_velocities):
             dm_lr.copy(field_name, dm_sr)
       
     # Increase size of fields not enhanced by the generator.
-    update_field(dm_sr, dm_lr, 'Masses',     upscale_factor, field_exponent=3)
-    update_field(dm_sr, dm_lr, 'Softenings', upscale_factor, field_exponent=1)
-    zero_field(dm_sr, dm_lr, 'Potentials', upscale_factor)
+    mass_exponent = 3
+    soft_exponent = 1
+    update_field(
+        dm_sr, dm_lr, 'Masses', upscale_factor, mass_exponent, compression
+    )
+    update_field(
+        dm_sr, dm_lr, 'Softenings', upscale_factor, soft_exponent, compression
+    )
+    zero_field(dm_sr, dm_lr, 'Potentials', upscale_factor, compression)
     if not include_velocities:
-        zero_field(dm_sr, dm_lr, 'Velocities', upscale_factor)
+        zero_field(dm_sr, dm_lr, 'Velocities', upscale_factor, compression)
     
     sr_file['ICs_parameters'].attrs['Grid Resolution'] *= upscale_factor
 
 
 
-def update_field(dm_sr, dm_lr, field_name, upscale_factor, field_exponent):
+def update_field(
+        dm_sr, dm_lr, field_name, upscale_factor, field_exponent, compression
+    ):
     """Update the named field in the given dark matter dataset to scale it by
     `upscale_factor ** field_exponent` and tile it to increase the number of
     elements in the field by a factor of `upscale_factor**3`.
@@ -169,13 +201,12 @@ def update_field(dm_sr, dm_lr, field_name, upscale_factor, field_exponent):
     dm_sr.create_dataset(
         field_name, 
         data=data,
-        compression='gzip',
-        compression_opts=4
+        compression=compression['comp_type'],
+        compression_opts=compression['comp_level']
     )
 
 
-
-def zero_field(dm_sr, dm_lr, field_name, upscale_factor):
+def zero_field(dm_sr, dm_lr, field_name, upscale_factor, compression):
     """Creates a dataset in `dm_sr` with the name `field_name` which is
     `upscale_factor**3` times larger than the same field in `dm_lr`. The
     created field is set to zero.
@@ -192,8 +223,8 @@ def zero_field(dm_sr, dm_lr, field_name, upscale_factor):
         shape=target_shape, 
         dtype=dm_lr[field_name].dtype,
         fillvalue=0,
-        compression='gzip',
-        compression_opts=4
+        compression=compression['comp_type'],
+        compression_opts=compression['comp_level']
     )
 
 

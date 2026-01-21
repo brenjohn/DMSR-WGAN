@@ -19,12 +19,13 @@ from swift_tools.enhancer import DMSREnhancer
 
 
 def swift_enhance(
-        model_dir: Path, 
-        data_dir: Path, 
+        model_dir:        Path, 
+        data_dir:         Path, 
         snapshot_pattern: str, 
-        output_suffix: str,
-        output_dir: Path,
-        seed: int
+        output_suffix:    str,
+        output_dir:       Path,
+        seed:             int,
+        use_compression:  bool
     ):
     """
     Enhance a Swift snapshots using a DMSR generator model.
@@ -55,7 +56,7 @@ def swift_enhance(
         sr_snapshot /= f"{lr_snapshot.stem}{output_suffix}{lr_snapshot.suffix}"
         
         # Enhance the low-resolution snapshot
-        enhancer.enhance(lr_snapshot, sr_snapshot)
+        enhancer.enhance(lr_snapshot, sr_snapshot, use_compression)
         print(f'Upscaling took {time.time() - ti}')
 
 
@@ -100,6 +101,12 @@ if __name__ == '__main__':
         default=7,
         help="Seed to use for random number generation."
     )
+    parser.add_argument(
+        '--use_compression', 
+        type=bool, 
+        default=True,
+        help="Flag to indicate if compression should be used for sr files."
+    )
     
     args = parser.parse_args()
     swift_enhance(
@@ -108,5 +115,6 @@ if __name__ == '__main__':
         args.snapshot_pattern, 
         args.output_suffix,
         args.output_dir,
-        args.seed
+        args.seed,
+        args.use_compression
     )
