@@ -36,8 +36,7 @@ def prepare_sr_snapshot(
     # Create a chunk writer to write enhanced patches to the sr file.
     return ChunkWriter(
         sr_file, 
-        include_velocities, 
-        upscale_factor, 
+        include_velocities,
         chunk_size, 
         compression=compression
     )
@@ -53,21 +52,18 @@ class ChunkWriter:
     def __init__(
             self, 
             file, 
-            include_velocities, 
-            upscale_factor,
+            include_velocities,
             chunk_size,
             batches_per_chunk = 4,
             compression = {'comp_type' : 'gzip', 'comp_level' : 4},
         ):
         self.file               = file
         self.include_velocities = include_velocities
-        self.upscale_factor     = upscale_factor
         self.chunk_size         = chunk_size
         self.batches_per_chunk  = batches_per_chunk
         self.compression        = compression
         
         self.grid_size = file['ICs_parameters'].attrs['Grid Resolution']
-        self.grid_size *= upscale_factor
         self.box_size  = file['Header'].attrs['BoxSize'][0]
         self.cell_size = self.box_size / self.grid_size
         
