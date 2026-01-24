@@ -87,20 +87,20 @@ class ChunkWriter:
         
         dm_data = self.file['DMParticles']
         self.pos_dset = dm_data.create_dataset(
-            'Coordinates', shape=(self.grid_size**3, 3), 
+            'Coordinates', shape=(int(self.grid_size)**3, 3), 
             dtype='f8', compression=comp_type, compression_opts=comp_level,
             chunks=vector_chunks
         )
         
         self.ids_dset = dm_data.create_dataset(
-            'ParticleIDs', shape=(self.grid_size**3,), 
+            'ParticleIDs', shape=(int(self.grid_size)**3,), 
             dtype='u8', compression=comp_type, compression_opts=comp_level,
             chunks=scalar_chunks
         )
         
         if self.include_velocities:
             self.vel_dset = dm_data.create_dataset(
-                'Velocities', shape=(self.grid_size**3, 3), 
+                'Velocities', shape=(int(self.grid_size)**3, 3), 
                 dtype='f4', compression=comp_type, compression_opts=comp_level,
                 chunks=vector_chunks
             )
