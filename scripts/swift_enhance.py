@@ -102,11 +102,12 @@ if __name__ == '__main__':
         help="Seed to use for random number generation."
     )
     parser.add_argument(
-        '--use_compression', 
-        type=bool, 
-        default=True,
-        help="Flag to indicate if compression should be used for sr files."
+        '--no_compression', 
+        action='store_false', 
+        dest='use_compression',
+        help="Disable compression for sr files."
     )
+    parser.set_defaults(use_compression=True)
     
     args = parser.parse_args()
     swift_enhance(

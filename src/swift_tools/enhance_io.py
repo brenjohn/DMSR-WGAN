@@ -9,6 +9,7 @@ This file defines functions and classes for handling IO related tasks that come
 up while enhancing SWIFT snapshots. 
 """
 
+import h5py as h5
 import numpy as np
 from .fields import get_displacement_field, get_velocity_field
 
@@ -145,14 +146,16 @@ def copy_metadata(
     for attr_name, attr_value in lr_file.attrs.items():
         sr_file.attrs[attr_name] = attr_value
     
+    target_group = 'PartType1'
+    alias_group = 'DMParticles'
     for group in lr_file.keys():
-        if group != 'DMParticles':
+        if group != target_group and group != alias_group:
             lr_file.copy(group, sr_file)
     
     # Copy attributes and fields from the lr dm group to the sr dm group,
     # except the fields whose size needs to be increased.
-    dm_sr = sr_file.create_group('DMParticles')
-    dm_lr = lr_file['DMParticles']
+    dm_sr = sr_file.create_group(target_group)
+    dm_lr = lr_file[target_group]
     for attr_name, attr_value in dm_lr.attrs.items():
         dm_sr.attrs[attr_name] = attr_value
     
@@ -174,6 +177,9 @@ def copy_metadata(
     zero_field(dm_sr, dm_lr, 'Potentials', upscale_factor, compression)
     if not include_velocities:
         zero_field(dm_sr, dm_lr, 'Velocities', upscale_factor, compression)
+        
+    # Create the Soft Link so tools can find it by target or alias name.
+    sr_file[alias_group] = h5.SoftLink(f'/{target_group}')
     
     sr_file['ICs_parameters'].attrs['Grid Resolution'] *= upscale_factor
 

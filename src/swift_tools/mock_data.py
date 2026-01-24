@@ -54,7 +54,8 @@ def generate_mock_snapshot(name, snapshot_dir, size):
         header = file.create_group('Header')
         header.attrs['BoxSize'] = np.array([box_size], dtype='f8')
 
-        dm_data = file.create_group('DMParticles')
+        dm_data = file.create_group('PartType1')
+        file['DMParticles'] = h5.SoftLink('/PartType1')
         
         dm_data.create_dataset(
             'Coordinates', shape=(grid_size**3, 3), 
