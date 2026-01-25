@@ -7,7 +7,7 @@ Created on Tue Dec 16 18:10:40 2025
 """
 
 import h5py as h5
-import numpy as np
+from numpy import array
 
 
 def generate_mock_snapshots(
@@ -39,52 +39,61 @@ def generate_mock_snapshot(name, snapshot_dir, size):
     box_size = 1.0
     chunk_dim = size**3
     grid_size = size
+    num_particles = grid_size**3
     vector_chunks = (chunk_dim, 3)
     scalar_chunks = (chunk_dim,)
     
     with h5.File(snapshot, 'w') as file:
         
         cosmology = file.create_group('Cosmology')
-        cosmology.attrs['h'] = np.array([h], dtype='f8')
-        cosmology.attrs['Scale-factor'] = np.array([a], dtype='f8')
+        cosmology.attrs['h'] = array([h], dtype='f8')
+        cosmology.attrs['Scale-factor'] = array([a], dtype='f8')
         
         ics = file.create_group('ICs_parameters')
         ics.attrs['Grid Resolution'] = grid_size
 
         header = file.create_group('Header')
-        header.attrs['BoxSize'] = np.array([box_size], dtype='f8')
+        part_num = [0, num_particles, 0, 0, 0, 0, 0]
+        header.attrs['BoxSize'] = array([box_size], dtype='f8')
+        header.attrs['NumPart_Total'] = array(part_num, dtype='int32')
+        header.attrs['NumPart_Total_HighWord'] = array(7 * [0], dtype='int32')
+        header.attrs['TotalNumberOfParticles'] = array(part_num, dtype='int64')
+        header.attrs['NumPart_ThisFile'] = array(part_num, dtype='int64')
+        header.attrs['InitialMassTable'] = array(7 * [1], dtype='f8')
 
         dm_data = file.create_group('PartType1')
         file['DMParticles'] = h5.SoftLink('/PartType1')
         
         dm_data.create_dataset(
-            'Coordinates', shape=(grid_size**3, 3), 
+            'Coordinates', shape=(num_particles, 3), 
             dtype='f8', compression='gzip', compression_opts=4,
             chunks=vector_chunks, fillvalue=0
         )
         
         dm_data.create_dataset(
-            'ParticleIDs', shape=(grid_size**3,), 
+            'ParticleIDs', shape=(num_particles,), 
             dtype='u8', compression='gzip', compression_opts=4,
             chunks=scalar_chunks, fillvalue=0
         )
         
         dm_data.create_dataset(
-            'Velocities', shape=(grid_size**3, 3), 
+            'Velocities', shape=(num_particles, 3), 
             dtype='f4', compression='gzip', compression_opts=4,
             chunks=vector_chunks, fillvalue=0
         )
         
         dm_data.create_dataset(
-            'Potentials', shape=(grid_size**3,), 
+            'Potentials', shape=(num_particles,), 
             dtype='f4', compression='gzip', compression_opts=4,
             chunks=scalar_chunks, fillvalue=0
         )
         
         dm_data.create_dataset(
-            'Softenings', shape=(grid_size**3,), 
+            'Softenings', shape=(num_particles,), 
             dtype='f4', compression='gzip', compression_opts=4,
             chunks=scalar_chunks, fillvalue=0
         )
         
-        dm_data.create_dataset('Masses', data=np.array([mass], dtype='f8'))
+        dm_data.create_dataset('Masses', data=array([mass], dtype='f8'))
+        dm_data.attrs['NumberOfParticles'] = num_particles
+        dm_data.attrs['TotalNumberOfParticles'] = num_particles

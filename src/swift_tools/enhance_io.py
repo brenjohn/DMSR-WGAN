@@ -156,8 +156,13 @@ def copy_metadata(
     # except the fields whose size needs to be increased.
     dm_sr = sr_file.create_group(target_group)
     dm_lr = lr_file[target_group]
+    
+    # Copy and update dark matter attributes: 
+    # NumberOfFields, NumberOfParticles and TotalNumberOfParticles
     for attr_name, attr_value in dm_lr.attrs.items():
         dm_sr.attrs[attr_name] = attr_value
+    dm_sr.attrs['NumberOfParticles'] *= upscale_factor**3
+    dm_sr.attrs['TotalNumberOfParticles'] *= upscale_factor**3
     
     fields_to_be_enlarged  = ['Masses',      'Potentials', 'Softenings']
     fields_to_be_enlarged += ['Coordinates', 'Velocities', 'ParticleIDs']
@@ -182,6 +187,17 @@ def copy_metadata(
     sr_file[alias_group] = h5.SoftLink(f'/{target_group}')
     
     sr_file['ICs_parameters'].attrs['Grid Resolution'] *= upscale_factor
+    
+    # Update Header group.
+    number_of_dm_particles = dm_sr.attrs['NumberOfParticles']
+    low_word = number_of_dm_particles & ((1 << 32) - 1)
+    high_word = number_of_dm_particles >> 32
+    sr_file['Header'].attrs['NumPart_Total'][1] = low_word
+    sr_file['Header'].attrs['NumPart_Total_HighWord'][1] = high_word
+    sr_file['Header'].attrs['TotalNumberOfParticles'][1] *= upscale_factor**3
+    sr_file['Header'].attrs['NumPart_ThisFile'][1] *= upscale_factor**3
+    sr_file['Header'].attrs['InitialMassTable'][1] /= upscale_factor**3
+    # TODO: Update Cells group (Counts, Offsets, Max positions etc).
 
 
 
