@@ -11,6 +11,7 @@ up while enhancing SWIFT snapshots.
 
 import h5py as h5
 import numpy as np
+from numpy import array
 from .fields import get_displacement_field, get_velocity_field
 
 
@@ -29,12 +30,12 @@ def prepare_sr_snapshot(
         'comp_type'  : 'gzip' if use_compression else None,
         'comp_level' : 4 if use_compression else None
     }
-    # Copy all data that won't be enhanced from the lr file to the sr file.
-    copy_metadata(
-        lr_file, sr_file, upscale_factor, include_velocities, compression
+    
+    add_supplementary_data(
+        sr_file, lr_file, upscale_factor, include_velocities, compression
     )
     
-    # Create a chunk writer to write enhanced patches to the sr file.
+    # Create a chunk writer for writing enhanced data to the sr file.
     return ChunkWriter(
         sr_file, 
         include_velocities,
@@ -136,41 +137,43 @@ class ChunkWriter:
 
 
 
-def copy_metadata(
-        lr_file, sr_file, upscale_factor, include_velocities, compression
+def add_supplementary_data(
+        sr_file, lr_file, upscale_factor, include_velocities, compression
     ):
-    """Copies data from the given lr_file to the sr file. Only data that is not
-    enhanced by the generator is copied.
+    """Adds structural groups, datasets and metadata to the sr file to
+    complement the enhanced sr data and form a complete swift snapshots.
     """
     # Copy attributes and groups of the lr_file to the sr_file.
     for attr_name, attr_value in lr_file.attrs.items():
         sr_file.attrs[attr_name] = attr_value
     
+    # Copy all groups from the lr file to the sr file, except for the dark
+    # matter particle groups and the cells group.
     target_group = 'PartType1'
     alias_group = 'DMParticles'
     for group in lr_file.keys():
-        if group != target_group and group != alias_group:
+        if group not in [target_group, alias_group, 'Cells']:
             lr_file.copy(group, sr_file)
     
-    # Copy attributes and fields from the lr dm group to the sr dm group,
-    # except the fields whose size needs to be increased.
+    # Create the dark matter particle group and a soft Link.
     dm_sr = sr_file.create_group(target_group)
     dm_lr = lr_file[target_group]
+    sr_file[alias_group] = h5.SoftLink(f'/{target_group}')
     
-    # Copy and update dark matter attributes: 
-    # NumberOfFields, NumberOfParticles and TotalNumberOfParticles
+    # Copy and update dark matter attributes.
     for attr_name, attr_value in dm_lr.attrs.items():
         dm_sr.attrs[attr_name] = attr_value
     dm_sr.attrs['NumberOfParticles'] *= upscale_factor**3
     dm_sr.attrs['TotalNumberOfParticles'] *= upscale_factor**3
     
+    # Copy fields that will be enlarged in the sr file.
     fields_to_be_enlarged  = ['Masses',      'Potentials', 'Softenings']
     fields_to_be_enlarged += ['Coordinates', 'Velocities', 'ParticleIDs']
     for field_name in dm_lr.keys():
         if field_name not in fields_to_be_enlarged:
             dm_lr.copy(field_name, dm_sr)
       
-    # Increase size of fields not enhanced by the generator.
+    # Enlarge the fields that won't be enhanced by the generator.
     mass_exponent = 3
     soft_exponent = 1
     update_field(
@@ -182,23 +185,67 @@ def copy_metadata(
     zero_field(dm_sr, dm_lr, 'Potentials', upscale_factor, compression)
     if not include_velocities:
         zero_field(dm_sr, dm_lr, 'Velocities', upscale_factor, compression)
-        
-    # Create the Soft Link so tools can find it by target or alias name.
-    sr_file[alias_group] = h5.SoftLink(f'/{target_group}')
     
+    # Update metadata in ICs and header groups and create a cells group.
     sr_file['ICs_parameters'].attrs['Grid Resolution'] *= upscale_factor
-    
-    # Update Header group.
     number_of_dm_particles = dm_sr.attrs['NumberOfParticles']
-    low_word = number_of_dm_particles & ((1 << 32) - 1)
-    high_word = number_of_dm_particles >> 32
-    sr_file['Header'].attrs['NumPart_Total'][1] = low_word
-    sr_file['Header'].attrs['NumPart_Total_HighWord'][1] = high_word
-    sr_file['Header'].attrs['TotalNumberOfParticles'][1] *= upscale_factor**3
-    sr_file['Header'].attrs['NumPart_ThisFile'][1] *= upscale_factor**3
-    sr_file['Header'].attrs['InitialMassTable'][1] /= upscale_factor**3
-    # TODO: Update Cells group (Counts, Offsets, Max positions etc).
+    update_header_group(sr_file, number_of_dm_particles, upscale_factor)
+    add_cells_group(sr_file, number_of_dm_particles)
+    
 
+
+def update_header_group(sr_file, number_of_dm_particles, upscale_factor):
+    """Updates the metadata in the header group of the given sr file. Namely,
+    the number of dm particles is increased by a factor of upscale_factor**3
+    and their initial mass is decreased by the same factor.
+    """
+    header         = sr_file['Header']
+    num_part_total = header.attrs['NumPart_Total']
+    num_part_high  = header.attrs['NumPart_Total_HighWord']
+    total_num      = header.attrs['TotalNumberOfParticles']
+    num_this_file  = header.attrs['NumPart_ThisFile']
+    mass_table     = header.attrs['InitialMassTable']
+    
+    low_word          = number_of_dm_particles & ((1 << 32) - 1)
+    high_word         = number_of_dm_particles >> 32
+    num_part_total[1] = low_word
+    num_part_high[1]  = high_word
+    total_num[1]      = int(total_num[1] * (upscale_factor**3))
+    num_this_file[1]  = int(num_this_file[1] * (upscale_factor**3))
+    mass_table[1]     = mass_table[1] / (upscale_factor**3)
+    
+    header.attrs['NumPart_Total']          = num_part_total
+    header.attrs['NumPart_Total_HighWord'] = num_part_high
+    header.attrs['TotalNumberOfParticles'] = total_num
+    header.attrs['NumPart_ThisFile']       = num_this_file
+    header.attrs['InitialMassTable']       = mass_table
+    
+
+
+def add_cells_group(sr_file, number_of_dm_particles):
+    """Creates a Cells group in the given sr file. The added data is for a
+    single cell covering the entire domain and containing all particles.
+    """
+    box_size = sr_file['Header'].attrs['BoxSize'][0]
+    cells = sr_file.create_group('Cells')
+    cells.create_group('Meta-data')
+    cells.create_group('Counts')
+    cells.create_group('Files')
+    cells.create_group('OffsetsInFile')
+    
+    # Add attributes.
+    cells['Meta-data'].attrs['dimension'] = (1, 1, 1)
+    cells['Meta-data'].attrs['nr_cells']  = 1
+    cells['Meta-data'].attrs['size']      = (box_size, box_size, box_size)
+    
+    # Add group datasets.
+    cells['Centres']             = array([[box_size, box_size, box_size]]) / 2
+    cells['Counts']['PartType1'] = array([number_of_dm_particles])
+    cells['Files']['PartType1']  = array([0])
+    cells['MaxPositions']        = array((box_size, box_size, box_size))
+    cells['MinPositions']        = array((0, 0, 0))
+    cells['OffsetsInFile']['PartType1'] = array([0])
+    
 
 
 def update_field(
