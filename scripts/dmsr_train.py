@@ -55,7 +55,7 @@ def main(parameter_file):
         gan.set_dataset(
             dataloader, 
             params["batch_size"], 
-            metadata['box_size'] / summary_stats['HR_Coordinates_std']
+            metadata['HR_patch_length'] / summary_stats['HR_Coordinates_std']
         )
         
         # Setup monitor objects to monitor training.

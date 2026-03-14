@@ -13,7 +13,7 @@ import h5py
 import torch
 
 from torch.utils.data import Dataset
-from .augmentation import permute_tensor
+from .augmentation import permute_tensor, flip_tensor
 
 
 class PatchDataSet(Dataset):
@@ -48,11 +48,15 @@ class PatchDataSet(Dataset):
         with h5py.File(patch_name, 'r') as patch:
             lr_data = patch['LR_Coordinates'][()]
             hr_data = patch['HR_Coordinates'][()]
-            lr_data = self.scale(lr_data, 'LR_Coordinates_std')
-            hr_data = self.scale(hr_data, 'HR_Coordinates_std')
+            lr_data = self.scale(lr_data, 'LR_Coordinates')
+            hr_data = self.scale(hr_data, 'HR_Coordinates')
             
             # Apply augmentation (random flip/permutation) if specified
             if self.augment:
+                random_flip = torch.randint(0, 2, (3,), dtype=torch.bool)
+                lr_data = flip_tensor(lr_data, random_flip)
+                hr_data = flip_tensor(hr_data, random_flip)
+                
                 random_perm = torch.randperm(3)
                 lr_data = permute_tensor(lr_data, random_perm)
                 hr_data = permute_tensor(hr_data, random_perm)
@@ -60,10 +64,12 @@ class PatchDataSet(Dataset):
             if self.velocities:
                 lr_velocity = patch['LR_Velocities'][()]
                 hr_velocity = patch['HR_Velocities'][()]
-                lr_velocity = self.scale(lr_velocity, 'LR_Velocities_std')
-                hr_velocity = self.scale(hr_velocity, 'HR_Velocities_std')
+                lr_velocity = self.scale(lr_velocity, 'LR_Velocities')
+                hr_velocity = self.scale(hr_velocity, 'HR_Velocities')
             
                 if self.augment:
+                    lr_velocity = flip_tensor(lr_velocity, random_flip)
+                    hr_velocity = flip_tensor(hr_velocity, random_flip)
                     lr_velocity = permute_tensor(lr_velocity, random_perm)
                     hr_velocity = permute_tensor(hr_velocity, random_perm)
                 
@@ -77,9 +83,10 @@ class PatchDataSet(Dataset):
         if self.scale_factors:
             return lr_data, hr_data, style
         
-        return lr_data, hr_data
+        return lr_data.detach(), hr_data.detach()
     
     
-    def scale(self, data, std_name):
+    def scale(self, data, base_name):
         data = torch.from_numpy(data).float()
-        return data / self.summary_stats[std_name]
+        std = self.summary_stats[base_name + '_std']
+        return data / std

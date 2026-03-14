@@ -42,8 +42,8 @@ def get_displacement_field(positions, ids, box_size, grid_size):
     
     # Create an array containing the postions of grid points.
     cell_size = box_size / grid_size
-    # points = np.arange(cell_size/2, box_size, cell_size)
-    points = np.arange(0, box_size, cell_size)
+    points = np.arange(cell_size/2, box_size, cell_size)
+    # points = np.arange(0, box_size, cell_size)
     grid_points = np.stack((points[ix], points[iy], points[iz]))
     
     # Compute the displacement of each particle from its associated grid point.

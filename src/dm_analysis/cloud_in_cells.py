@@ -10,7 +10,7 @@ density fields from position data.
 """
 
 import numpy as np
-from numba import njit, prange
+from numba import njit
 
 
 @njit(inline='always')
@@ -25,7 +25,7 @@ def add(grid, i, j, k, amount, grid_size, periodic):
 
 
 
-@njit(parallel=True, fastmath=True)
+@njit
 def cloud_in_cells(particles, grid_size, box_size, value=1.0, periodic=True):
     """Converts particle coordinates into a density field with shape 
     (grid_size, grid_size, grid_size) using Cloud-in-Cells (CIC) interpolation.
@@ -47,7 +47,7 @@ def cloud_in_cells(particles, grid_size, box_size, value=1.0, periodic=True):
     inv_cell_size = 1.0 / cell_size
     num_particles = particles.shape[0]
     
-    for i in prange(num_particles):
+    for i in range(num_particles):
         # Get the coordinates of particle i, noramlised to [0, grid_size).
         xi = particles[i, 0] * inv_cell_size
         yi = particles[i, 1] * inv_cell_size

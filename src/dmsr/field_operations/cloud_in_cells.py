@@ -23,8 +23,7 @@ def displacements_to_positions(displacements, box_length):
     
     # Add the grid positions to the given relative positions to get the
     # absolute positions of particles.
-    # r = torch.arange(cell_size/2, box_length, cell_size, device=device)
-    r = torch.arange(0, box_length, cell_size, device=device)
+    r = torch.arange(cell_size/2, box_length, cell_size, device=device)
     X, Y, Z = torch.meshgrid(r, r, r, indexing='ij')
     grid_positions = torch.stack((X, Y, Z), axis=0)
     positions = displacements + grid_positions
@@ -39,8 +38,6 @@ def cic_density_field(displacements, box_size, grid_size=None):
     Note, periodic boundary conditions are not implemented and particles 
     outside the box are ignored.
     """
-    displacements = displacements - displacements.mean((2, 3, 4), keepdims=True)
-    
     batch_size = displacements.shape[0]
     grid_size = displacements.shape[-1] if grid_size is None else grid_size
     device = displacements.device
@@ -53,7 +50,7 @@ def cic_density_field(displacements, box_size, grid_size=None):
     # Compute the indices for the grid cells associated with each particle.
     # Note, grid indices here can be outside the boundary (0, grid_size).
     # these indices correspond to "ghost zones" that pad the main grid.
-    grid_positions = torch.floor(positions)
+    grid_positions = torch.floor(positions - 0.5) + 0.5
     
     # Compute the weights (1 - dx) * (1 - dy) * (1 - dz)
     positions = torch.unsqueeze(positions, dim=-2)
@@ -86,4 +83,5 @@ def cic_density_field(displacements, box_size, grid_size=None):
         density[n].view(-1).index_add_(0, index, source.float())
     
     # density = density / cell_size**3
+    # density = density / grid_size**3
     return density[:, None, ...]

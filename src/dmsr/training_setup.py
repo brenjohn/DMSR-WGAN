@@ -38,13 +38,19 @@ def setup_environment():
     is_distributed = 'LOCAL_RANK' in os.environ
 
     if is_distributed:
-        dist.init_process_group(backend="nccl")
         rank = int(os.environ["RANK"])
         local_rank = int(os.environ["LOCAL_RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
+        if torch.cuda.is_available():
+            backend = "nccl"
+            torch.cuda.set_device(local_rank)
+            device = torch.device(local_rank)
+        else:
+            backend = "gloo"
+            device = torch.device("cpu")
+        dist.init_process_group(backend=backend)
         is_main_process = (rank == 0)
-        torch.cuda.set_device(local_rank)
-        device = torch.device(local_rank)
+        
 
     else:
         rank = 0
