@@ -26,14 +26,14 @@ class SamplesMonitor(Monitor):
             patch_number  = 1,
             velocities    = False,
             scale_factors = False,
-            summary_stats = None,
+            metadata      = None,
             samples_dir   = Path('./data/samples/'),
             seed          = 42
         ):
         
         self.device = gan.device
         self.generator = gan.generator.module
-        self.summary_stats = summary_stats
+        self.summary_stats = metadata
         
         lr_sample, hr_sample, style = self.get_sample(
             data_directory, patch_number, velocities, scale_factors

@@ -21,13 +21,13 @@ class SpectraDataset(Dataset):
             data_dir, 
             include_velocities    = False,
             include_scale_factors = False,
-            summary_stats     = None,
+            metadata              = None,
             **kwargs
         ):
         self.data_dir      = data_dir
         self.velocities    = include_velocities
         self.scale_factors = include_scale_factors
-        self.summary_stats = summary_stats
+        self.summary_stats = metadata
             
         self.num_patches = len(list(data_dir.iterdir()))
         

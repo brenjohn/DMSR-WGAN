@@ -29,20 +29,17 @@ class SpectrumMonitor(Monitor):
             self, 
             gan,
             dataset,
-            box_size,
-            grid_size,
-            particle_mass,
-            summary_stats,
+            metadata,
             checkpoint_dir
         ):
-        self.gan = gan
-        self.generator = gan.generator.module
-        self.box_size = box_size
-        self.grid_size = grid_size
-        self.particle_mass = particle_mass
-        self.summary_stats = summary_stats
-        self.num_samples = len(dataset)
-        self.device = gan.device
+        self.gan            = gan
+        self.generator      = gan.generator.module
+        self.box_size       = metadata['HR_patch_length']
+        self.grid_size      = metadata['HR_patch_size']
+        self.particle_mass  = metadata['HR_mass']
+        self.metadata       = metadata
+        self.num_samples    = len(dataset)
+        self.device         = gan.device
         self.checkpoint_dir = checkpoint_dir
         
         # Create a collate function to move data to the device and return a
@@ -85,7 +82,7 @@ class SpectrumMonitor(Monitor):
             z = self.generator.sample_latent_space(1, self.device)
             sr_sample = self.generator(lr_sample, z, style)
             displacements = sr_sample[:, 0:3, ...].detach()
-            displacements *= self.summary_stats['HR_Coordinates_std']
+            displacements *= self.metadata['HR_Coordinates_std']
             sr_ks, sr_spectrum = self.get_power_spectrum(displacements)
             
             # Compute the uniform metric between the real and fake power 
@@ -130,7 +127,7 @@ class SpectrumMonitor(Monitor):
     
     
     def get_power_spectrum(self, field):
-        box_size = self.box_size
+        box_size  = self.box_size
         grid_size = self.grid_size
         cell_size = box_size / grid_size
         mass = self.particle_mass

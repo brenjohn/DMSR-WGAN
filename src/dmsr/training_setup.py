@@ -7,6 +7,7 @@ Created on Wed Nov 12 11:09:00 2025
 """
 
 import os
+import json
 from pathlib import Path
 
 import numpy as np
@@ -121,8 +122,8 @@ def setup_dataloader(params, output_dir, is_main_process, is_distributed):
     """
     Loads training data and its summary statistics, and creates the DataLoader.
 
-    The main process saves the loaded metadata and summary statistics to
-    the output directory. It uses DistributedSampler if DDP is active.
+    The main process saves the loaded metadata to the output directory. It uses
+    DistributedSampler if DDP is active.
 
     Args:
         params (dict): Dictionary of parameters.
@@ -133,27 +134,21 @@ def setup_dataloader(params, output_dir, is_main_process, is_distributed):
     Returns:
         tuple: (
             dataloader    : The configured training data loader.
-            summary_stats : Dict of statistics (position std deviation etc).
-            metadata      : Dict of metadata (box size, etc.).
+            metadata      : Dict of metadata (box size, summary stats, etc.).
         )
     """
     data_directory = Path(params["data"]["train_data_dir"])
     
-    metadata = np.load(
-        data_directory / 'metadata.npy', allow_pickle=True
-    ).item()
-    
-    summary_stats = np.load(
-        data_directory / 'summary_stats.npy', allow_pickle=True
-    ).item()
+    with open(data_directory / 'metadata.json', 'r') as file:
+        metadata = json.load(file)
     
     if is_main_process:
-        np.save(output_dir / 'normalisation.npy', summary_stats)
-        np.save(output_dir / 'metadata.npy', metadata)
+        with open(output_dir / 'metadata.npy', 'w') as file:
+            json.dump(metadata, file, indent=2)
     
     dataset = PatchDataSet(
-        data_dir      = data_directory,
-        summary_stats = summary_stats,
+        data_dir = data_directory,
+        metadata = metadata,
         **params["data"]
     )
     
@@ -177,14 +172,13 @@ def setup_dataloader(params, output_dir, is_main_process, is_distributed):
         sampler=sampler
     )
     
-    return dataloader, summary_stats, metadata
+    return dataloader, metadata
 
 
 
 def setup_monitors(
         params, 
-        gan, 
-        summary_stats, 
+        gan,
         metadata, 
         is_main_process, 
         output_dir, 
@@ -200,8 +194,7 @@ def setup_monitors(
     Args:
         params          : Dictionary of configuration parameters.
         gan             : The initialized WGAN model instance.
-        summary_stats   : Training data summary statistics.
-        metadata        : Dataset metadata required for SpectrumMonitor.
+        metadata        : Dataset metadata inlcuding summary statistics.
         is_main_process : True if this is the main process (rank 0).
         output_dir      : Root directory for saving monitor outputs.
         device          : The device used for monitoring operations.
@@ -220,8 +213,8 @@ def setup_monitors(
                 monitors[name] = SamplesMonitor(
                     gan,
                     valid_data_directory,
-                    summary_stats = summary_stats,
-                    samples_dir   = output_dir / name,
+                    metadata    = metadata,
+                    samples_dir = output_dir / name,
                     **monitor_params
                 )
                 
@@ -233,18 +226,15 @@ def setup_monitors(
                 
             elif name.startswith('spectrum'):
                 spectra_data = SpectraDataset(
-                    data_dir      = valid_data_directory,
-                    summary_stats = summary_stats,
+                    data_dir = valid_data_directory,
+                    metadata = metadata,
                     **params["data"]
                 )
                 
                 monitors[name] = SpectrumMonitor(
                     gan,
                     spectra_data,
-                    metadata['HR_patch_length'],
-                    metadata['HR_patch_size'],
-                    metadata['HR_mass'],
-                    summary_stats,
+                    metadata,
                     checkpoint_dir = checkpoint_dir
                 )
         

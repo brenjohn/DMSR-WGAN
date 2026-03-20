@@ -49,20 +49,19 @@ def main(parameter_file):
         gan = setup_wgan(params, device, is_distributed)
     
         # Setup training data.
-        dataloader, summary_stats, metadata = setup_dataloader(
+        dataloader, metadata = setup_dataloader(
             params, output_dir, is_main_process, is_distributed
         )    
         gan.set_dataset(
             dataloader, 
             params["batch_size"], 
-            metadata['HR_patch_length'] / summary_stats['HR_Coordinates_std']
+            metadata['HR_patch_length'] / metadata['HR_Coordinates_std']
         )
         
         # Setup monitor objects to monitor training.
         setup_monitors(
             params, 
-            gan, 
-            summary_stats, 
+            gan,
             metadata, 
             is_main_process, 
             output_dir, 

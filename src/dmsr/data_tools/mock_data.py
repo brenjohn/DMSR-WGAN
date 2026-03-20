@@ -7,7 +7,7 @@ Created on Fri Mar  7 12:49:26 2025
 """
 
 import h5py
-import numpy as np
+import json
 
 from numpy.random import randn, rand
 
@@ -66,8 +66,7 @@ def generate_metadata(data_dir, lr_grid, hr_grid, lr_padding, hr_padding):
     box_size, lr_patch_length, hr_patch_length = 1, 1, 1
     lr_mass, hr_mass = 1, 1
     
-    meta_file = data_dir / 'metadata.npy'
-    np.save(meta_file, {
+    metadata = {
         'box_size'        : box_size,
         'LR_patch_length' : lr_patch_length * box_size / lr_grid,
         'HR_patch_length' : hr_patch_length * box_size / hr_grid,
@@ -80,18 +79,22 @@ def generate_metadata(data_dir, lr_grid, hr_grid, lr_padding, hr_padding):
         'LR_mass'         : lr_mass,
         'HR_mass'         : hr_mass,
         'hubble'          : 0.7
-    })
+    }
     
-    np.save(data_dir / 'summary_stats.npy', {
-        'LR_Coordinates_std'  : np.float64(1.0),
-        'LR_Coordinates_mean' : np.float64(0.0),
-        'HR_Coordinates_std'  : np.float64(1.0),
-        'HR_Coordinates_mean' : np.float64(0.0),
-        'LR_Velocities_std'   : np.float64(1.0),
-        'LR_Velocities_mean'  : np.float64(0.0),
-        'HR_Velocities_std'   : np.float64(1.0),
-        'HR_Velocities_mean'  : np.float64(0.0),
-    })
+    metadata |= {
+        'LR_Coordinates_std'  : 1.0,
+        'LR_Coordinates_mean' : 0.0,
+        'HR_Coordinates_std'  : 1.0,
+        'HR_Coordinates_mean' : 0.0,
+        'LR_Velocities_std'   : 1.0,
+        'LR_Velocities_mean'  : 0.0,
+        'HR_Velocities_std'   : 1.0,
+        'HR_Velocities_mean'  : 0.0,
+    }
+    
+    metadata_file = data_dir / 'metadata.json'
+    with open(metadata_file, 'w') as file:
+        json.dump(metadata, file)
 
 
 def generate_mock_patch(channels, grid_size):
