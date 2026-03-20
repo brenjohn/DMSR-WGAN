@@ -23,6 +23,7 @@ output_dir = "{output_dir}"
 data_dir = "{snapshot_dir}"
 stride = 1
 include_velocities = true
+include_spectra = true
 
 # --- Low Resolution (LR) Patch Arguments ---
 [LR_patch_args]
@@ -89,8 +90,8 @@ class TestDatasetPreparation(unittest.TestCase):
         """Shared setup logic for mock data and config."""
         self.LR_size, self.HR_size = 32, 64
         self.snapshot_dir = self.test_output_dir / 'snapshots'
-        self.output_dir = self.test_output_dir / 'dataset'
-        self.config_path = self.test_output_dir / 'dataset_preparation.toml'
+        self.output_dir   = self.test_output_dir / 'dataset'
+        self.config_path  = self.test_output_dir / 'dataset_preparation.toml'
 
         generate_mock_snapshots(
             snapshot_dir=self.snapshot_dir,
@@ -110,13 +111,13 @@ class TestDatasetPreparation(unittest.TestCase):
             f.write(config_content)
     
     
-    def test_preparation(self):
+    def test_dataset_generation(self):
         """Tests the end-to-end data pipeline sequentially."""
         self.prepare_mock_data()
 
         # 1. Test patches preparation
         results_prep = self.run_script(
-            '../../scripts/dataset_preparation.py', 
+            '../../scripts/create_dataset.py', 
             [f'--config_file={self.config_path}']
         )
         self.assertEqual(results_prep.returncode, 0, msg=results_prep.stderr)
@@ -124,18 +125,3 @@ class TestDatasetPreparation(unittest.TestCase):
             list(self.output_dir.glob('patches/*.h5')), 
             "No patches generated"
         )
-
-        # 2. Test statistics preparation
-        results_stats = self.run_script(
-            '../../scripts/dataset_statistics.py', 
-            [f'--dataset_dir={self.output_dir}', '--include_velocities']
-        )
-        self.assertEqual(results_stats.returncode, 0, msg=results_stats.stderr)
-        self.assertTrue((self.output_dir / 'summary_stats.npy').exists())
-
-        # 3. Test spectra preparation
-        results_spec = self.run_script(
-            '../../scripts/dataset_spectra.py', 
-            [f'--dataset_dir={self.output_dir}']
-        )
-        self.assertEqual(results_spec.returncode, 0, msg=results_spec.stderr)

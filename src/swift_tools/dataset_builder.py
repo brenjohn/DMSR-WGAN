@@ -142,7 +142,7 @@ class DatasetBuilder:
         grid_size = int(HR_patch_size)
         box_size  = HR_patch_length
         
-        for patch_file in patch_dir.iterdir():
+        for patch_file in patch_dir.glob('*.h5'):
             with h5py.File(patch_file, 'a') as file:
                 patch = file['HR_Coordinates'][()]
                 
@@ -169,8 +169,9 @@ def create_patches(patch_args, particle_data_name):
     dict using Welford algorithm.
     """
     patch_args['particle_data_name'] = particle_data_name
-    data_name = patch_args["prefix"] + '_' + particle_data_name
-    print('Creating', data_name, 'patches.')
+    dataset_name = f'{patch_args["prefix"]}_{particle_data_name}'
+    patch_args['dataset_name'] = dataset_name
+    print('Creating', dataset_name, 'patches.')
     
     with mp.Pool(patch_args['num_procs']) as pool:
         tasks = []
@@ -179,11 +180,11 @@ def create_patches(patch_args, particle_data_name):
             tasks.append(task_args)
         stats = pool.map(convert_field_to_patches, tasks)
         
-    return welford_reduction(stats, data_name)
+    return welford_reduction(stats, dataset_name)
 
 
 
-def welford_reduction(stats, data_name):
+def welford_reduction(stats, dataset_name):
     """
     Use Welford's algorithm to reduce a list of summary statistics to a single
     dict. The stats list is assumed to contain (mean, variance, num) tuples.
@@ -200,8 +201,8 @@ def welford_reduction(stats, data_name):
     
     variance = M2 / count
     return {
-        data_name + '_mean' : mean, 
-        data_name + '_std'  : variance**0.5
+        dataset_name + '_mean' : mean, 
+        dataset_name + '_std'  : variance**0.5
     }
 
 
@@ -214,7 +215,7 @@ def convert_field_to_patches(snapshot):
     """
     snap_path = snapshot['snapshot']
     particle_data_name = snapshot['particle_data_name']
-    dataset_name = f'{snapshot["prefix"]}_{particle_data_name}'
+    dataset_name = snapshot['dataset_name']
     
     grid_size, box_size, mass, h, a = read_metadata(snap_path)
     IDs = read_particle_data(snap_path, 'ParticleIDs')
