@@ -68,21 +68,31 @@ class DMSRWGAN:
         scale = self.scale_factor
         
         # Calculate the crop size for the lr data.
-        self.lr_crop_size = int(floor((lr_size - ceil(hr_size / scale)) / 2))
+        downscaled_output_size = ceil(hr_size / scale)
+        lr_padding = lr_size - downscaled_output_size
+        self.lr_crop_size = int(floor(lr_padding / 2))
         
         # Calculate the crop size for the linearly upscaled lr data.
-        self.hr_crop_size = scale * (lr_size - 2 * self.lr_crop_size) - hr_size
+        lr_inner_region = lr_size - 2 * self.lr_crop_size
+        self.hr_crop_size = scale * (lr_inner_region) - hr_size
         self.hr_crop_size //= 2
+        
+        # Avoid duplicating boundary during interploation by including 1 layer
+        # of padding in the lr data and cropping `scale` times that in the
+        # interploated hr data.
+        self.lr_crop_size -= 1
+        self.hr_crop_size += scale
         
         
     def set_dataset(
             self, 
             dataloader, 
             batch_size, 
-            box_size,
+            metadata,
         ):
-        self.data = dataloader
-        self.box_size = box_size
+        self.data       = dataloader
+        self.box_size   = metadata['HR_patch_length']
+        self.box_size  /= metadata['HR_Coordinates_std']
         self.batch_size = batch_size
         
         

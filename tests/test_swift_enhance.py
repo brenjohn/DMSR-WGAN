@@ -8,15 +8,26 @@ Created on Fri Dec 19 16:05:17 2025
 
 import os
 import sys
+import json
 import shutil
 import tempfile
 import unittest
 import subprocess
-import numpy as np
 
 from pathlib import Path
 from dmsr import DMSRGenerator
 from swift_tools import generate_mock_snapshots
+
+
+PARAMETER_TEMPLATE = """\
+model_dir        = '{model_dir}'
+data_dir         = '{data_dir}'
+snapshot_pattern = '{snap_pattern}'
+output_suffix    = '_sr_test' 
+output_dir       = '{output_dir}'
+seed             = 7 
+use_compression  = false
+"""
 
 
 class TestSwiftEnhance(unittest.TestCase):
@@ -39,9 +50,11 @@ class TestSwiftEnhance(unittest.TestCase):
         self.test_path = Path(self.temp_dir.name)
         
         # Define internal paths
-        self.model_dir = self.test_path / 'mock_model'
-        self.data_dir = self.test_path / 'lr_snapshots'
-        self.output_dir = self.test_path / 'sr_snapshots'
+        self.parameter_file = self.test_path / 'parameters.toml'
+        self.model_dir      = self.test_path / 'mock_model'
+        self.data_dir       = self.test_path / 'lr_snapshots'
+        self.output_dir     = self.test_path / 'sr_snapshots'
+        self.snap_pattern   = 'run*/LR_snapshots/*' 
         
         self.data_dir.mkdir()
     
@@ -65,16 +78,18 @@ class TestSwiftEnhance(unittest.TestCase):
         model.save(self.model_dir)
         
         # Create the normalization file.
-        np.save(self.model_dir / 'normalisation.npy', {
-            'LR_Coordinates_std'  : np.float64(1.0),
-            'LR_Coordinates_mean' : np.float64(0.0),
-            'HR_Coordinates_std'  : np.float64(1.0),
-            'HR_Coordinates_mean' : np.float64(0.0),
-            'LR_Velocities_std'   : np.float64(1.0),
-            'LR_Velocities_mean'  : np.float64(0.0),
-            'HR_Velocities_std'   : np.float64(1.0),
-            'HR_Velocities_mean'  : np.float64(0.0),
-        })
+        metadata = {
+            'LR_Coordinates_std'  : 1.0,
+            'LR_Coordinates_mean' : 0.0,
+            'HR_Coordinates_std'  : 1.0,
+            'HR_Coordinates_mean' : 0.0,
+            'LR_Velocities_std'   : 1.0,
+            'LR_Velocities_mean'  : 0.0,
+            'HR_Velocities_std'   : 1.0,
+            'HR_Velocities_mean'  : 0.0,
+        }
+        with open(self.model_dir / 'metadata.json', 'w') as file:
+            json.dump(metadata, file)
     
     
     def run_script(self, script_path, args):
@@ -116,17 +131,22 @@ class TestSwiftEnhance(unittest.TestCase):
             HR_size=32
         )
         
+        # Create mock parameter file
+        parameter_file = PARAMETER_TEMPLATE.format(
+            model_dir    = self.model_dir.as_posix(),
+            data_dir     = self.data_dir.as_posix(),
+            output_dir   = self.output_dir.as_posix(),
+            snap_pattern = self.snap_pattern
+        )
+        with open(self.parameter_file, 'w') as f:
+            f.write(parameter_file)
+        
         # 2. Act: Run the script
         # Using a relative path to the script from the temp_dir
         script_path = '../../scripts/swift_enhance.py'
         
         args = [
-            f'--model_dir={self.model_dir.as_posix()}',
-            f'--data_dir={self.data_dir.as_posix()}',
-            '--snapshot_pattern=run0/LR_snapshots/snap_*.hdf5',
-            '--output_suffix=_sr_test',
-            f'--output_dir={self.output_dir.as_posix()}',
-            '--seed=21'
+            f'--parameter_file={self.parameter_file.as_posix()}',
         ]
         
         result = self.run_script(script_path, args)

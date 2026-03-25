@@ -10,7 +10,6 @@ import os
 import json
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
@@ -143,7 +142,7 @@ def setup_dataloader(params, output_dir, is_main_process, is_distributed):
         metadata = json.load(file)
     
     if is_main_process:
-        with open(output_dir / 'metadata.npy', 'w') as file:
+        with open(output_dir / 'metadata.json', 'w') as file:
             json.dump(metadata, file, indent=2)
     
     dataset = PatchDataSet(

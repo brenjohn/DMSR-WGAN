@@ -10,6 +10,7 @@ a swift snapshot using a dmsr generator model.
 """
 
 import time
+import json
 import torch
 import numpy as np
 from h5py import File
@@ -34,12 +35,9 @@ class DMSREnhancer:
         self.generator = generator
         
         # Load any scaling parameters if they exist.
-        scale_path = model_dir / "normalisation.npy"
-        scale_params = None
-        if scale_path.exists():
-            scale_params = np.load(scale_path, allow_pickle=True).item()
-            scale_params = {k : v.item() for k, v in scale_params.items()}
-        self.scale_params = scale_params
+        metadata_path = model_dir / "metadata.json"
+        with open(metadata_path, 'r') as file:
+            self.scale_params = json.load(file)
         
         velocities = generator.input_channels == 6 #TODO: no magic numbers
         self.include_velocities = velocities
