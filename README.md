@@ -28,3 +28,5 @@ For more details, refer to:
 ## Results
 For scripts and steps to reproduce results from [On the Use of WGANs for Super Resolution in Dark-Matter Simulations](https://arxiv.org/abs/2501.13056 ), 
 please switch to the `on-wgan-super-resolution` branch.
+
+The WGAN model used to produce for [Machine-Learned Super-Resolution Reproduces Halo Assembly and Early Galaxy Populations](https://arxiv.org/abs/2501.13056 ) can be found in `scripts/swift_upscaling/models/model_particle_density/`. Scripts for used to train the model can be found in `scripts/training/` while scripts and commands used to enhance a snapshot using a trained model can be found in `scripts/swift_upscaling/`.
